@@ -1,12 +1,12 @@
+import { notion } from "./client.js";
 import { 
-    notion,
     getTitle,
     getDate,
     getNumber,
     getCheckbox,
     getRichText,
     getMultiSelect,
- } from "./client.js";
+} from "./props.js";
 
 
 export async function getExpenses() {
