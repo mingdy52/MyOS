@@ -1,6 +1,9 @@
 import "dotenv/config";
-import { getExpenses } from "./notion/expense.js";
+import { getAllData } from "./notion/index.js";
 
-const expenses = await getExpenses();
-console.log(`총 ${expenses.length}건 조회됨`);
-console.log(expenses.slice(0, 3));
+const data = await getAllData();
+
+for (const [name, records] of Object.entries(data)) {
+  console.log(`\n[${name}] 총 ${records.length}건`);
+  console.log(records.slice(0, 3));
+}

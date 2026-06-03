@@ -21,6 +21,14 @@ export function getRichText(props: any, name: string) {
     return props[name]?.rich_text?.[0]?.plain_text ?? "";   
 } 
 
+export function getSelect(props: any, name: string) {
+    return props[name]?.select?.name ?? "";
+}
+
 export function getMultiSelect(props: any, name: string) {
     return props[name]?.multi_select?.map((s: any) => s.name).join(", ") ?? "";
+}
+
+export function getStatus(props: any, name: string) {
+    return props[name]?.status?.name ?? "";
 }
