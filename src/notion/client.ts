@@ -1,4 +1,9 @@
 import { Client } from "@notionhq/client";
 
-export const notion = new Client({ auth: process.env.NOTION_API_KEY });
+const notionApiKey = process.env.NOTION_API_KEY;
+if (!notionApiKey) {
+  throw new Error("NOTION_API_KEY is required");
+}
+
+export const notion = new Client({ auth: notionApiKey });
 
