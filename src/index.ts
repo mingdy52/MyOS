@@ -240,14 +240,39 @@ const system =
 // 함수 밖(모듈 수준)에 두면 질문 사이에도 유지돼서 "후속 질문"이 가능하다.
 const messages: Anthropic.MessageParam[] = [];
 
+// ── 모델 라우팅(비용 절감) ──────────────────────────────────────
+// 단순 조회는 싸고 빠른 하이쿠로, 분석·추론이 필요한 질문만 상위 모델(소넷)로 올린다.
+// 토큰 단가가 몇 배 차이 나므로, 쉬운 질문을 하이쿠로 처리하는 것만으로 비용이 크게 준다.
+const MODEL_SIMPLE = "claude-haiku-4-5-20251001"; // 간단 조회용 (쌈)
+const MODEL_COMPLEX = "claude-sonnet-4-6"; // 복잡 분석용 (상위 모델)
+
+// 이 단어가 질문에 들어 있으면 "단순 조회를 넘어 분석/추론이 필요하다"고 보고 상위 모델로 올린다.
+// 새 단어가 필요하면 여기만 늘리면 된다.
+const COMPLEX_HINTS = [
+  "분석", "비교", "달성률", "추세", "추이", "패턴", "상관관계", "상관",
+  "왜", "이유", "원인", "평가", "추천", "예측", "전망", "인사이트", "개선",
+];
+
+// 질문을 보고 어떤 모델로 처리할지 고른다. (추가 API 호출 없이 키워드만으로 판단 → 비용 0)
+function pickModel(question: string): string {
+  return COMPLEX_HINTS.some((w) => question.includes(w))
+    ? MODEL_COMPLEX
+    : MODEL_SIMPLE;
+}
+
 // 질문 하나를 받아, Claude가 도구를 다 쓰고 최종 답을 낼 때까지 돌린다.
 async function ask(userQuestion: string): Promise<void> {
   messages.push({ role: "user", content: userQuestion });
 
+  // 이번 질문을 처리할 모델을 한 번 정해서, 도구 호출 루프 내내 같은 모델을 쓴다.
+  const model = pickModel(userQuestion);
+  const label = model === MODEL_COMPLEX ? "Sonnet · 복잡 분석" : "Haiku · 간단 조회";
+  console.log(`🤖 모델: ${label}`);
+
   // Claude가 더 이상 도구를 부르지 않을 때까지 반복한다.
   while (true) {
     const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model,
       max_tokens: 16000,
       system,
       tools,
