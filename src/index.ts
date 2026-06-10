@@ -315,6 +315,35 @@ function fmtTokens(t: Tokens): string {
   return `입력 ${t.input} · 캐시읽기 ${t.cacheRead} · 캐시쓰기 ${t.cacheWrite} · 출력 ${t.output}`;
 }
 
+// 대화 기록에도 캐시 브레이크포인트를 건다.
+// 매 호출 직전, "마지막 메시지의 마지막 블록" 한 곳에만 cache_control을 찍는다.
+// 그러면 그 앞 대화 전체(직전 호출에서 캐시에 써 둔 prefix)가 cache_read로 재사용된다.
+// 브레이크포인트는 요청당 최대 4개라, 항상 한 곳만 두어 system 것과 합쳐 2개로 유지한다.
+// 저장된 기록(history)은 건드리지 않고, 보낼 사본에만 표시를 단다.
+function withConversationCache(
+  history: Anthropic.MessageParam[]
+): Anthropic.MessageParam[] {
+  if (history.length === 0) return history;
+
+  const msgs = history.map((m) => ({ ...m }));
+  const last = msgs[msgs.length - 1]!;
+
+  // content가 문자열이면 텍스트 블록 하나로 바꿔서 표시할 자리를 만든다.
+  const blocks: any[] =
+    typeof last.content === "string"
+      ? [{ type: "text", text: last.content }]
+      : last.content.map((b) => ({ ...b }));
+  if (blocks.length === 0) return msgs; // 빈 메시지는 표시할 자리가 없으니 그냥 둔다.
+
+  // 마지막 블록에만 cache_control을 단다.
+  blocks[blocks.length - 1] = {
+    ...blocks[blocks.length - 1],
+    cache_control: { type: "ephemeral" },
+  };
+  last.content = blocks;
+  return msgs;
+}
+
 // 질문 하나를 받아, Claude가 도구를 다 쓰고 최종 답을 낼 때까지 돌린다.
 async function ask(userQuestion: string): Promise<void> {
   messages.push({ role: "user", content: userQuestion });
@@ -334,7 +363,7 @@ async function ask(userQuestion: string): Promise<void> {
       max_tokens: 16000,
       system: cachedSystem, // prompt caching: system+tools를 캐시로 묶어 재전송 비용을 줄인다.
       tools,
-      messages,
+      messages: withConversationCache(messages), // 대화 기록도 캐시로 재사용.
     });
 
     // 이번 호출의 토큰 사용량을 질문별/세션 누적에 둘 다 더한다.
