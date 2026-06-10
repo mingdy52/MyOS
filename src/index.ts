@@ -301,11 +301,29 @@ async function ask(userQuestion: string): Promise<void> {
   }
 }
 
+// "db diet" 처럼 입력하면 그 DB의 스키마(컬럼·타입)를 보여준다.
+// 쓰기 전에 "이 DB엔 무슨 칸이 있더라?"를 빠르게 확인하는 용도.
+function printDbSchema(name: string): void {
+  const schema = schemas[name];
+  if (!schema) {
+    console.log(`\n알 수 없는 DB: ${name}`);
+    console.log(`사용 가능: ${Object.keys(schemas).join(", ")}\n`);
+    return;
+  }
+  console.log(`\n📋 [${name}] 스키마 — 컬럼(타입)`);
+  for (const [col, type] of Object.entries(schema.columns)) {
+    const mark = type === "title" ? "  ← 제목" : "";
+    console.log(`   • ${col} (${type})${mark}`);
+  }
+  console.log();
+}
+
 // ── 5) 대화형(REPL) 루프 ────────────────────────────────────────
 // 한 번 켜두고 질문을 계속 받는다. "exit"/"quit"/빈 줄이면 종료.
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 
-console.log("💬 MyOS 비서 (종료: exit 또는 Ctrl+C)\n");
+console.log("💬 MyOS 비서 (종료: exit 또는 Ctrl+C)");
+console.log('   "db <DB 이름>" 로 스키마 보기, "db" 만 치면 DB 목록\n');
 
 while (true) {
   const question = (await rl.question("질문> ")).trim();
@@ -316,6 +334,18 @@ while (true) {
     messages.length = 0; // 배열 내용을 비운다 (const라도 .length=0 은 가능).
     console.log("\n🧹 대화 기록을 비웠어요.\n");
     continue; // ask() 안 부르고 다음 질문으로.
+  }
+
+  // "db" 또는 "db <이름>" → 스키마 조회 명령. Claude에 안 보내고 바로 처리한다.
+  if (question === "db" || question.startsWith("db ")) {
+    const name = question.slice(2).trim();
+    if (name === "") {
+      console.log(`\n사용 가능한 DB: ${Object.keys(schemas).join(", ")}`);
+      console.log('예: "db <db 이름>" 처럼 입력하면 그 DB의 컬럼을 보여줍니다.\n');
+    } else {
+      printDbSchema(name);
+    }
+    continue;
   }
 
   console.log(); // 보기 좋게 한 줄 띄우기
