@@ -1,5 +1,6 @@
 import { notion } from "./client.js";
 import { schemas, type FieldType } from "./schema.js";
+import { readProperty } from "./props.js";
 
 // 값 하나(JS)를 노션 속성 payload로 바꾼다.
 // 읽을 때 쓰던 props.ts의 get* 들과 정확히 반대 방향이다.
@@ -69,6 +70,25 @@ export async function createRecord(
     properties: buildProperties(database, fields),
   });
   return { ok: true, id: page.id };
+}
+
+// 수정 전 미리보기용: 바뀔 컬럼들의 "지금 값"만 읽어온다.
+// 확인 프롬프트에서 "기존값 → 새값"으로 보여주는 데 쓴다.
+export async function getCurrentValues(
+  database: string,
+  id: string,
+  columns: string[]
+): Promise<Record<string, any>> {
+  const schema = schemas[database];
+  if (!schema) throw new Error(`알 수 없는 데이터베이스: ${database}`);
+
+  const page: any = await notion.pages.retrieve({ page_id: id });
+  const current: Record<string, any> = {};
+  for (const column of columns) {
+    const type = schema.columns[column];
+    if (type) current[column] = readProperty(page.properties, column, type);
+  }
+  return current;
 }
 
 // 기존 행을 수정한다. id는 읽기(get_*) 결과에 들어 있는 id를 그대로 쓴다.

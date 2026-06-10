@@ -14,7 +14,7 @@ import { getProjects } from "./notion/project.js";
 import { getApplications } from "./notion/application.js";
 
 import { schemas } from "./notion/schema.js";
-import { createRecord, updateRecord } from "./notion/mutate.js";
+import { createRecord, updateRecord, getCurrentValues } from "./notion/mutate.js";
 
 // Anthropic 클라이언트.
 const anthropic = new Anthropic();
@@ -179,6 +179,45 @@ async function runTool(name: string, input: any): Promise<string> {
 // 데이터를 바꾸는(위험한) 도구들. 실행 전에 사용자 확인을 받는다.
 const WRITE_TOOLS = new Set(["create_record", "update_record"]);
 
+// 값 하나를 사람이 읽기 좋은 문자열로. (빈 값은 "(없음)", 배열은 쉼표로)
+function fmtValue(v: any): string {
+  if (v === undefined || v === null || v === "") return "(없음)";
+  if (Array.isArray(v)) return v.length ? v.join(", ") : "(없음)";
+  return String(v);
+}
+
+// 쓰기 도구를 실행하기 직전에, 무엇을 어떤 값으로 넣거나 바꿀지 보기 좋게 출력한다.
+// create: "컬럼: 값", update: "컬럼: 기존값 → 새값"(기존값은 노션에서 읽어와 비교).
+async function printWritePreview(name: string, input: any): Promise<void> {
+  const fields: Record<string, any> = input.fields ?? {};
+
+  if (name === "create_record") {
+    console.log(`\n✍️  [${input.database}]에 새 행을 추가합니다:`);
+    for (const [col, value] of Object.entries(fields)) {
+      console.log(`   • ${col}: ${fmtValue(value)}`);
+    }
+    return;
+  }
+
+  if (name === "update_record") {
+    console.log(`\n✍️  [${input.database}] 행을 수정합니다 (id: ${input.id}):`);
+    // 바뀔 컬럼들의 현재 값을 읽어와 "기존 → 새 값"으로 보여준다.
+    let current: Record<string, any> = {};
+    try {
+      current = await getCurrentValues(
+        input.database,
+        input.id,
+        Object.keys(fields)
+      );
+    } catch {
+      // 현재 값을 못 읽어도 새 값만이라도 보여준다.
+    }
+    for (const [col, value] of Object.entries(fields)) {
+      console.log(`   • ${col}: ${fmtValue(current[col])} → ${fmtValue(value)}`);
+    }
+  }
+}
+
 // ── 4) 에이전트: 질문 하나를 끝까지 처리 ────────────────────────
 const today = new Date().toISOString().slice(0, 10); // "2026-06-03"
 
@@ -233,9 +272,7 @@ async function ask(userQuestion: string): Promise<void> {
 
       // 쓰기 도구(삽입/수정)면 실제 실행 전에 무엇을 할지 보여주고 확인을 받는다.
       if (WRITE_TOOLS.has(block.name)) {
-        console.log(
-          `\n✍️  쓰기 요청: ${block.name}(${JSON.stringify(block.input)})`
-        );
+        await printWritePreview(block.name, block.input);
         const answer = (await rl.question("실행할까요? (y/N) "))
           .trim()
           .toLowerCase();
