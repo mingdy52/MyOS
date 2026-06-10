@@ -1,17 +1,10 @@
 import { queryDataSource, dateRange } from "./query.js";
-import {
-  getTitle,
-  getDate,
-} from "./props.js";
 
+// dataSourceId와 컬럼 매핑은 schema.ts의 weight에서 자동으로 가져온다.
 export function getWeightRecords(from?: string, to?: string) {
   return queryDataSource({
-    dataSourceId: process.env.NOTION_WEIGHT_DATA_SOURCE_ID!,
+    database: "weight",
     sortBy: "날짜",
     filters: dateRange("날짜", from, to),
-    map: (props) => ({
-      날짜: getDate(props, "날짜"),
-      체중: getTitle(props, "체중"),
-    }),
   });
 }

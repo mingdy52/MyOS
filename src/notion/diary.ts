@@ -1,22 +1,10 @@
 import { queryDataSource, dateRange } from "./query.js";
-import {
-  getTitle,
-  getDate,
-  getRichText,
-  getSelect,
-} from "./props.js";
 
+// dataSourceId와 컬럼 매핑은 schema.ts의 diary에서 자동으로 가져온다.
 export function getDiaryRecords(from?: string, to?: string) {
   return queryDataSource({
-    dataSourceId: process.env.NOTION_DIARY_DATA_SOURCE_ID!,
+    database: "diary",
     sortBy: "날짜",
     filters: dateRange("날짜", from, to),
-    map: (props) => ({
-      날짜: getDate(props, "날짜"),
-      제목: getTitle(props, "제목"),
-      에너지: getSelect(props, "에너지"),
-      스트레스: getSelect(props, "스트레스"),
-      기분: getRichText(props, "기분"),
-    }),
   });
 }

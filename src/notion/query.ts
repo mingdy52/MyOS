@@ -1,18 +1,41 @@
 import { notion } from "./client.js";
+import { schemas } from "./schema.js";
+import { readProperty } from "./props.js";
 
-// 모든 리더가 공통으로 하는 일을 모아둔 헬퍼.
-//  - dataSourceId : 어떤 노션 데이터소스를 읽을지
-//  - map          : 한 행(page)의 props를 받아서 원하는 모양으로 가공하는 함수
-//  - sortBy       : 이 컬럼 기준으로 내림차순 정렬. 없으면 정렬 안 함.
-//  - filters      : 조건들의 배열. 1개 이상이면 자동으로 { and: [...] }로 묶어서 보낸다.
-//                   (비어 있거나 없으면 필터 없이 전체 조회)
+// 스키마(컬럼 → 타입)만 보고, 한 행(props)을 읽어 객체로 만드는 map 함수를 자동으로 만든다.
+// 리더가 getTitle/getNumber... 를 나열할 필요가 없어진다. (queryDataSource가 database를 받으면 내부에서 호출)
+// 결과의 키는 노션 컬럼명 그대로라, 쓰기(create/update) 때 쓰는 컬럼명과 똑같아진다.
+export function buildMap(database: string) {
+  const schema = schemas[database];
+  if (!schema) throw new Error(`알 수 없는 데이터베이스: ${database}`);
+
+  return (props: any) => {
+    const row: Record<string, any> = {};
+    for (const [name, type] of Object.entries(schema.columns)) {
+      row[name] = readProperty(props, name, type);
+    }
+    return row;
+  };
+}
+
+// 모든 리더가 공통으로 쓰는 조회 헬퍼.
+//  - database  : schema에 등록된 DB 이름. 주면 dataSourceId·map을 schema에서 꺼낸다.
+//  - dataSourceId / map : 아직 schema에 없는 DB는 이 둘을 직접 넘긴다.
+//  - sortBy    : 이 컬럼 기준 내림차순 정렬. 없으면 정렬 안 함.
+//  - filters   : 조건들의 배열. 1개 이상이면 { and: [...] }로 묶어 보낸다. (없으면 전체 조회)
 export async function queryDataSource(options: {
-  dataSourceId: string;
-  map: (props: any) => any;
+  database?: string;
+  dataSourceId?: string;
+  map?: (props: any) => any;
   sortBy?: string;
   filters?: any[];
 }) {
-  const { dataSourceId, map, sortBy, filters } = options;
+  const { database, sortBy, filters } = options;
+
+  // database가 있으면 schema가 단일 진실 공급원: dataSourceId도 map도 거기서 나온다.
+  const schema = database ? schemas[database] : undefined;
+  const dataSourceId = schema?.dataSourceId ?? options.dataSourceId!;
+  const map = options.map ?? (database ? buildMap(database) : (p: any) => p);
 
   const response = await notion.dataSources.query({
     data_source_id: dataSourceId,
@@ -24,7 +47,11 @@ export async function queryDataSource(options: {
     ...(filters && filters.length > 0 && { filter: { and: filters } }),
   });
 
-  return response.results.map((page: any) => map(page.properties));
+  // id를 함께 돌려준다. 수정(update_record) 때 어떤 행인지 가리키는 데 쓴다.
+  return response.results.map((page: any) => ({
+    id: page.id,
+    ...map(page.properties),
+  }));
 }
 
 // 날짜 범위 조건들을 배열로 만들어 돌려준다.
