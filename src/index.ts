@@ -162,22 +162,48 @@ const tools: Anthropic.Tool[] = Object.entries(registry).map(
   })
 );
 
+// 데이터를 바꾸는(위험한) 도구들. 실행 전에 사용자 확인을 받는다.
+const WRITE_TOOLS = new Set(["create_record", "update_record"]);
+
+// ── 조회 결과 캐시 ────────────────────────────────────────────
+// 같은 읽기 도구를 같은 입력으로 다시 부르면, 노션을 또 조회하지 않고 저장해 둔 결과를 쓴다.
+// (주의: Claude 토큰을 줄이는 게 아니라 노션 호출/대기시간을 줄이는 것이다. 토큰 절감은 prompt caching 몫.)
+// 쓰기 도구는 데이터를 바꾸므로 캐싱하지 않고, 쓰기가 성공하면 오래된 값을 막으려 캐시를 통째로 비운다.
+const queryCache = new Map<string, string>();
+
+function cacheKey(name: string, input: any): string {
+  return `${name}:${JSON.stringify(input ?? {})}`;
+}
+
 // ── 3) 도구 실행기 ──────────────────────────────────────────────
 // Claude가 "이 도구를 이 입력으로 불러줘"라고 하면, registry에서 찾아 실행한다.
 async function runTool(name: string, input: any): Promise<string> {
   const tool = registry[name];
   if (!tool) return `알 수 없는 도구: ${name}`;
+
+  const isWrite = WRITE_TOOLS.has(name);
+  const key = cacheKey(name, input);
+
+  // 읽기 도구이고 캐시에 있으면 노션을 다시 부르지 않고 바로 돌려준다.
+  if (!isWrite && queryCache.has(key)) {
+    console.log("   ⚡ 캐시에서 바로 가져옴 (노션 조회 생략)");
+    return queryCache.get(key)!;
+  }
+
   try {
     const data = await tool.run(input);
-    return JSON.stringify(data);
+    const result = JSON.stringify(data);
+    if (isWrite) {
+      queryCache.clear(); // 데이터가 바뀌었으니 조회 캐시를 비운다.
+    } else {
+      queryCache.set(key, result);
+    }
+    return result;
   } catch (e: any) {
     // 오류도 문자열로 돌려주면 REPL이 죽지 않고 Claude가 보고 고쳐 시도한다.
     return `오류: ${e?.message ?? String(e)}`;
   }
 }
-
-// 데이터를 바꾸는(위험한) 도구들. 실행 전에 사용자 확인을 받는다.
-const WRITE_TOOLS = new Set(["create_record", "update_record"]);
 
 // 값 하나를 사람이 읽기 좋은 문자열로. (빈 값은 "(없음)", 배열은 쉼표로)
 function fmtValue(v: any): string {
@@ -236,6 +262,13 @@ const system =
   "수정(update_record)하려면 먼저 get_* 로 읽어서 그 행의 id를 알아낸 뒤 id로 호출해라. " +
   "쓰기는 실행 직전에 사용자가 y/N로 확인하니, 무엇을 어떤 값으로 넣거나 바꿀지 한국어로 분명히 먼저 말해라.";
 
+// 시스템 프롬프트는 매 호출마다 똑같이 들어가므로 prompt caching으로 묶는다.
+// (전송 순서가 tools → system 이라, 마지막 system 블록 한 곳만 표시해도 tools까지 함께 캐싱된다.)
+// 두 번째 호출부터 이 부분이 cache_read 로 잡혀 거의 공짜(정가의 ~10%)로 처리된다 → 토큰 절감.
+const cachedSystem: Anthropic.TextBlockParam[] = [
+  { type: "text", text: system, cache_control: { type: "ephemeral" } },
+];
+
 // 대화 기록. API는 상태가 없어서 매번 전체 기록을 보낸다.
 // 함수 밖(모듈 수준)에 두면 질문 사이에도 유지돼서 "후속 질문"이 가능하다.
 const messages: Anthropic.MessageParam[] = [];
@@ -260,6 +293,28 @@ function pickModel(question: string): string {
     : MODEL_SIMPLE;
 }
 
+// ── 토큰 사용량 모니터링 ──────────────────────────────────────
+// 응답마다 usage가 온다. 그걸 더해서 이번 질문/세션 누적 사용량을 보여준다.
+//  - input      : 정가로 처리된 입력 토큰
+//  - cacheWrite : 캐시에 처음 쓸 때(정가의 ~1.25배). 첫 호출에서만 발생.
+//  - cacheRead  : 캐시에서 읽은 토큰(정가의 ~10%). 캐싱이 먹히면 여기로 잡힌다.
+//  - output     : 출력 토큰
+type Tokens = { input: number; output: number; cacheWrite: number; cacheRead: number };
+const session: Tokens = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
+
+// usage 한 건을 누적 대상(acc)에 더한다.
+function addUsage(acc: Tokens, u: Anthropic.Usage): void {
+  acc.input += u.input_tokens;
+  acc.output += u.output_tokens;
+  acc.cacheWrite += u.cache_creation_input_tokens ?? 0;
+  acc.cacheRead += u.cache_read_input_tokens ?? 0;
+}
+
+// 토큰 사용량을 한 줄로 보기 좋게.
+function fmtTokens(t: Tokens): string {
+  return `입력 ${t.input} · 캐시읽기 ${t.cacheRead} · 캐시쓰기 ${t.cacheWrite} · 출력 ${t.output}`;
+}
+
 // 질문 하나를 받아, Claude가 도구를 다 쓰고 최종 답을 낼 때까지 돌린다.
 async function ask(userQuestion: string): Promise<void> {
   messages.push({ role: "user", content: userQuestion });
@@ -269,15 +324,22 @@ async function ask(userQuestion: string): Promise<void> {
   const label = model === MODEL_COMPLEX ? "Sonnet · 복잡 분석" : "Haiku · 간단 조회";
   console.log(`🤖 모델: ${label}`);
 
+  // 이번 질문에서만 쓴 토큰. (세션 누적과 따로 보여주려고 질문마다 새로 센다.)
+  const q: Tokens = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
+
   // Claude가 더 이상 도구를 부르지 않을 때까지 반복한다.
   while (true) {
     const response = await anthropic.messages.create({
       model,
       max_tokens: 16000,
-      system,
+      system: cachedSystem, // prompt caching: system+tools를 캐시로 묶어 재전송 비용을 줄인다.
       tools,
       messages,
     });
+
+    // 이번 호출의 토큰 사용량을 질문별/세션 누적에 둘 다 더한다.
+    addUsage(q, response.usage);
+    addUsage(session, response.usage);
 
     // 방금 받은 어시스턴트 응답을 대화 기록에 그대로 추가한다.
     messages.push({ role: "assistant", content: response.content });
@@ -287,6 +349,7 @@ async function ask(userQuestion: string): Promise<void> {
       for (const block of response.content) {
         if (block.type === "text") console.log(block.text);
       }
+      console.log(`\n📊 이번 질문 토큰 — ${fmtTokens(q)}`);
       return;
     }
 
@@ -343,22 +406,46 @@ function printDbSchema(name: string): void {
   console.log();
 }
 
+// 입력할 수 있는 명령어 목록. "help" 칠 때만 보여줘서 평소 화면을 깔끔하게 유지한다.
+function printHelp(): void {
+  console.log("\n📖 명령어");
+  console.log("   help          이 도움말 보기");
+  console.log("   db            DB 목록 보기");
+  console.log("   db <이름>     그 DB의 컬럼(스키마) 보기");
+  console.log("   token         이번 세션 누적 토큰 사용량 보기");
+  console.log("   clear         대화 기록·조회 캐시 비우기");
+  console.log("   exit          종료 (Ctrl+C 도 가능)");
+  console.log("   그 외 입력    질문으로 처리\n");
+}
+
 // ── 5) 대화형(REPL) 루프 ────────────────────────────────────────
 // 한 번 켜두고 질문을 계속 받는다. "exit"/"quit"/빈 줄이면 종료.
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 
-console.log("💬 MyOS 비서 (종료: exit 또는 Ctrl+C)");
-console.log('   "db <DB 이름>" 로 스키마 보기, "db" 만 치면 DB 목록\n');
+console.log('💬 MyOS 비서 — "help" 로 명령어 보기 (종료: exit)\n');
 
 while (true) {
   const question = (await rl.question("질문> ")).trim();
   if (question === "" || question === "exit" || question === "quit") break;
 
-  // 대화 기록 초기화. 주제를 바꿀 때 쓰면 토큰(비용)이 다시 가벼워진다.
-  if (question === "clear" || question === "초기화") {
+  // "help" → 명령어 목록.
+  if (question === "help") {
+    printHelp();
+    continue;
+  }
+
+  // "clear" → 대화 기록·조회 캐시 비우기. 주제를 바꿀 때 쓰면 토큰(비용)이 다시 가벼워진다.
+  if (question === "clear") {
     messages.length = 0; // 배열 내용을 비운다 (const라도 .length=0 은 가능).
-    console.log("\n🧹 대화 기록을 비웠어요.\n");
+    queryCache.clear(); // 조회 캐시도 함께 비운다.
+    console.log("\n🧹 대화 기록과 조회 캐시를 비웠어요.\n");
     continue; // ask() 안 부르고 다음 질문으로.
+  }
+
+  // "token" → 이번 세션에 쓴 토큰 누적을 보여준다.
+  if (question === "token") {
+    console.log(`\n📊 세션 누적 토큰 — ${fmtTokens(session)}\n`);
+    continue;
   }
 
   // "db" 또는 "db <이름>" → 스키마 조회 명령. Claude에 안 보내고 바로 처리한다.
