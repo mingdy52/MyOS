@@ -32,9 +32,10 @@ const korean = (d: Date) => { const p = parts(d); return `${p.y}년 ${p.m}월 ${
 // Claude가 준 텍스트를 줄 단위로 노션 블록으로 바꾼다.
 // "## 제목"은 heading, "- 항목"은 불릿, 나머지는 문단. (노션 rich_text 한 덩어리는 2000자 한도라 1900자로 자른다)
 function richText(content: string) {
-  return content
-    .match(/[\s\S]{1,1900}/g)!
-    .map((chunk) => ({ type: "text" as const, text: { content: chunk } }));
+  return (content.match(/[\s\S]{1,1900}/g) ?? []).map((chunk) => ({
+    type: "text" as const,
+    text: { content: chunk },
+  }));
 }
 function toBlocks(text: string): any[] {
   const blocks = text
@@ -92,7 +93,7 @@ async function main() {
 
   const response = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 3000,
+    max_tokens: 4096,
     system,
     messages: [
       {
@@ -108,6 +109,9 @@ async function main() {
     .trim();
 
   if (!summary) throw new Error("Claude가 빈 응답을 반환했습니다.");
+  if (response.stop_reason === "max_tokens") {
+    console.warn("⚠️ 응답이 max_tokens에 걸려 잘렸을 수 있습니다. max_tokens를 더 올리세요.");
+  }
 
   // 노션 리포트 DB에 페이지를 만든다. (제목=기간, 본문=분석 요약)
   const report = schemas.report;
