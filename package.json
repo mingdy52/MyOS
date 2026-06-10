@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx src/index.ts",
+    "report": "tsx src/report.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },

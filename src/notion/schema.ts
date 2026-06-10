@@ -125,4 +125,12 @@ export const schemas: Record<string, DbSchema> = {
       메모: "text",
     },
   },
+  // 주간 리포트 저장용. 컬럼은 제목(title) 하나뿐이고,
+  // AI 분석 요약 본문은 길어서 컬럼이 아니라 페이지 본문에 넣는다(report.ts).
+  report: {
+    dataSourceId: process.env.NOTION_REPORT_DATA_SOURCE_ID!,
+    columns: {
+      제목: "title",
+    },
+  },
 };

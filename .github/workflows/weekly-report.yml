@@ -1,0 +1,35 @@
+name: weekly-report
+
+# 매주 일요일 밤 9시(KST)에 주간 리포트를 생성한다.
+# GitHub의 cron은 UTC 기준이라, 일요일 21:00 KST = 일요일 12:00 UTC 로 적는다.
+# (cron 형식: 분 시 일 월 요일 / 요일 0 = 일요일)
+on:
+  schedule:
+    - cron: "0 12 * * 0"
+  workflow_dispatch: # 깃허브 화면에서 수동으로도 돌려볼 수 있게 한다.
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run report
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_REPORT_DATA_SOURCE_ID: ${{ secrets.NOTION_REPORT_DATA_SOURCE_ID }}
+          NOTION_TARGET_DATA_SOURCE_ID: ${{ secrets.NOTION_TARGET_DATA_SOURCE_ID }}
+          NOTION_EXPENSE_DATA_SOURCE_ID: ${{ secrets.NOTION_EXPENSE_DATA_SOURCE_ID }}
+          NOTION_DIET_DATA_SOURCE_ID: ${{ secrets.NOTION_DIET_DATA_SOURCE_ID }}
+          NOTION_WORKOUT_DATA_SOURCE_ID: ${{ secrets.NOTION_WORKOUT_DATA_SOURCE_ID }}
+          NOTION_STUDY_DATA_SOURCE_ID: ${{ secrets.NOTION_STUDY_DATA_SOURCE_ID }}
+          NOTION_DIARY_DATA_SOURCE_ID: ${{ secrets.NOTION_DIARY_DATA_SOURCE_ID }}
+          NOTION_WEIGHT_DATA_SOURCE_ID: ${{ secrets.NOTION_WEIGHT_DATA_SOURCE_ID }}
