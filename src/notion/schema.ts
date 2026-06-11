@@ -61,7 +61,7 @@ export const schemas: Record<string, DbSchema> = {
     columns: {
       날짜: "date",
       운동: "title",
-      시간: "text",
+      시간: "number",
       강도: "select",
     },
   },
