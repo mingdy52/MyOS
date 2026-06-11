@@ -120,7 +120,7 @@ export const schemas: Record<string, DbSchema> = {
     columns: {
       회사: "title",
       직무: "select",
-      상태: "status",
+      상태: "select",
       지원일: "date",
       메모: "text",
     },
