@@ -4,5 +4,8 @@ node_modules
 
 /src/generated/prisma
 
+# 포트폴리오 사이트는 Actions가 빌드해 배포한다 → 생성물은 커밋하지 않는다
+/docs
+
 # macOS
 .DS_Store

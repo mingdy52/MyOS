@@ -1,0 +1,49 @@
+name: deploy-pages
+
+# 검수·확정된 콘텐츠(src/content/portfolio.json)를 정적 HTML로 렌더해 GitHub Pages로 배포한다.
+#  - main에 푸시할 때 (콘텐츠 JSON을 고쳐 커밋하면 자동 배포)
+#  - 깃허브 화면에서 수동 실행(workflow_dispatch)할 때
+# 콘텐츠 가공(Claude)은 로컬에서 `npm run portfolio`로 따로 돌린다. 배포는 Claude도 노션도 부르지 않는다.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pages 배포에 필요한 권한.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 동시에 여러 번 돌면 마지막 것만 살린다.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # 확정본 JSON을 렌더해 docs/index.html 생성. (외부 API 안 부르므로 secrets 불필요)
+      - run: npm run site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
