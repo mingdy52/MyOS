@@ -57,7 +57,7 @@ const registry: Record<string, ToolDef> = {
     run: (i) => getWorkoutRecords(i.from, i.to, i.exercise),
   },
   get_studies: {
-    description: "공부 기록(과목/시간/집중도)을 조회한다. 기간(from/to)으로 거를 수 있다.",
+    description: "공부·작업 기록(한 일/시간/집중도/기술)을 조회한다. 기간(from/to)으로 거를 수 있다.",
     properties: { ...dateRange },
     run: (i) => getStudyRecords(i.from, i.to),
   },

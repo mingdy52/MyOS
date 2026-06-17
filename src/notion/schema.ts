@@ -69,9 +69,10 @@ export const schemas: Record<string, DbSchema> = {
     dataSourceId: process.env.NOTION_STUDY_DATA_SOURCE_ID!,
     columns: {
       날짜: "date",
-      과목: "title",
+      "한 일": "title", // 만지거나 만든 것 (공부/작업 구분 없이)
       시간: "number",
       집중도: "select",
+      기술: "multi_select", // 이 세션에 배우거나 쓴 기술 (techstack DB와 같은 이름 사용)
       메모: "text",
     },
   },
