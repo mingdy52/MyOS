@@ -106,3 +106,38 @@ export async function updateRecord(
   });
   return { ok: true, id };
 }
+
+// 삭제 미리보기용: "이 행이 뭔지"를 알아볼 수 있게 제목(title)과 날짜(date) 값을 읽어온다.
+// 확인 프롬프트에서 "2026-06-18 · 점심 행을 삭제합니다"처럼 보여주는 데 쓴다.
+export async function getRecordSummary(
+  database: string,
+  id: string
+): Promise<{ title: string; date: string }> {
+  const schema = schemas[database];
+  if (!schema) throw new Error(`알 수 없는 데이터베이스: ${database}`);
+
+  // 이 DB의 title·date 컬럼 이름을 스키마에서 찾는다(보통 각각 하나씩).
+  const cols = Object.entries(schema.columns);
+  const titleColumn = cols.find(([, type]) => type === "title")?.[0];
+  const dateColumn = cols.find(([, type]) => type === "date")?.[0];
+
+  const page: any = await notion.pages.retrieve({ page_id: id });
+  const title = titleColumn
+    ? String(readProperty(page.properties, titleColumn, "title") ?? "")
+    : "";
+  const date = dateColumn
+    ? String(readProperty(page.properties, dateColumn, "date") ?? "")
+    : "";
+  return { title: title || "(제목 없음)", date };
+}
+
+// 기존 행을 삭제한다. id는 읽기(get_*) 결과에 들어 있는 id를 그대로 쓴다.
+// 노션은 완전 삭제가 아니라 휴지통으로 보낸다(in_trash) → 노션에서 30일 내 복구 가능.
+export async function deleteRecord(database: string, id: string) {
+  if (!id) throw new Error("삭제하려면 id가 필요하다. 먼저 읽어서 id를 확인해라.");
+  const schema = schemas[database];
+  if (!schema) throw new Error(`알 수 없는 데이터베이스: ${database}`);
+
+  await notion.pages.update({ page_id: id, in_trash: true });
+  return { ok: true, id };
+}

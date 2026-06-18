@@ -1,6 +1,6 @@
 {
   "_사용법": "프로젝트 이름(노션의 '프로젝트' 값과 똑같이) → 보여줄 이미지 파일 목록. 파일은 assets/ 폴더에 넣고 파일명만 적으세요. 적은 순서대로 캐러셀에 나옵니다. (예: 아키텍처를 먼저, 화면을 뒤에)",
-  "MyOS": ["myos-screen1.png", "myos-screen2.png", "myos-screen3.png", "myos-arch.png"],
+  "MyOS": ["myos-screen1.png", "myos-screen2.png", "myos-screen3.png", "myos-screen4.png", "myos-arch.png"],
   "Mero": ["mero-screen1.png", "mero-screen2.png", "mero-screen3.png", "mero-arch.png"],
   "마사학": [],
   "한국전파진흥협회 평가 시스템 유지보수": [],

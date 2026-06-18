@@ -14,7 +14,13 @@ import { getProjects } from "./notion/project.js";
 import { getApplications } from "./notion/application.js";
 
 import { schemas } from "./notion/schema.js";
-import { createRecord, updateRecord, getCurrentValues } from "./notion/mutate.js";
+import {
+  createRecord,
+  updateRecord,
+  deleteRecord,
+  getCurrentValues,
+  getRecordSummary,
+} from "./notion/mutate.js";
 
 // Anthropic 클라이언트.
 const anthropic = new Anthropic();
@@ -137,6 +143,25 @@ const registry: Record<string, ToolDef> = {
     },
     run: (i) => updateRecord(i.database, i.id, i.fields),
   },
+  delete_record: {
+    description:
+      "기존 행을 삭제한다(노션 휴지통으로 보내며 30일 내 복구 가능). " +
+      "먼저 get_* 로 읽어서 지울 행의 id를 정확히 확인한 뒤, 그 id로 호출해라. " +
+      "여러 행을 지울 때는 행마다 한 번씩 호출한다. 쓸 수 있는 DB: " +
+      Object.keys(schemas).join(", "),
+    properties: {
+      database: {
+        type: "string",
+        enum: Object.keys(schemas),
+        description: "어느 DB의 행을 삭제할지",
+      },
+      id: {
+        type: "string",
+        description: "삭제할 행의 id (읽기 결과에 들어 있는 id)",
+      },
+    },
+    run: (i) => deleteRecord(i.database, i.id),
+  },
 };
 
 // 스키마를 훑어 "[expense] 내역(title), 금액(number)... / [diet] ..." 같은 문구를 만든다.
@@ -163,7 +188,7 @@ const tools: Anthropic.Tool[] = Object.entries(registry).map(
 );
 
 // 데이터를 바꾸는(위험한) 도구들. 실행 전에 사용자 확인을 받는다.
-const WRITE_TOOLS = new Set(["create_record", "update_record"]);
+const WRITE_TOOLS = new Set(["create_record", "update_record", "delete_record"]);
 
 // ── 조회 결과 캐시 ────────────────────────────────────────────
 // 같은 읽기 도구를 같은 입력으로 다시 부르면, 노션을 또 조회하지 않고 저장해 둔 결과를 쓴다.
@@ -217,6 +242,20 @@ function fmtValue(v: any): string {
 async function printWritePreview(name: string, input: any): Promise<void> {
   const fields: Record<string, any> = input.fields ?? {};
 
+  if (name === "delete_record") {
+    // 어떤 행을 지우는지 제목·날짜를 읽어와 보여준다(잘못된 행 삭제 방지).
+    let summary = { title: `(id: ${input.id})`, date: "" };
+    try {
+      summary = await getRecordSummary(input.database, input.id);
+    } catch {
+      // 요약을 못 읽어도 최소한 어느 DB/id를 지우는지는 아래에서 보여준다.
+    }
+    const when = summary.date ? `${summary.date} · ` : "";
+    console.log(`\n🗑️  [${input.database}] 행을 삭제합니다 (휴지통으로 이동, 복구 가능):`);
+    console.log(`   • ${when}${summary.title}`);
+    return;
+  }
+
   if (name === "create_record") {
     console.log(`\n✍️  [${input.database}]에 새 행을 추가합니다:`);
     for (const [col, value] of Object.entries(fields)) {
@@ -260,8 +299,12 @@ const system =
   '"~을 확인해 볼까요?" 같은 되묻기로 끝내지 말고, 직접 확인한 결과로 답해. ' +
   "데이터를 조회한 뒤에는 사람이 읽기 좋게 요약해서 한국어로 답해. " +
   // 쓰기 안내
-  "데이터를 추가/수정할 때는 create_record / update_record 도구를 쓴다. " +
-  "수정(update_record)하려면 먼저 get_* 로 읽어서 그 행의 id를 알아낸 뒤 id로 호출해라. " +
+  "데이터를 추가/수정/삭제할 때는 create_record / update_record / delete_record 도구를 쓴다. " +
+  "수정(update_record)이나 삭제(delete_record)를 하려면 먼저 get_* 로 읽어서 그 행의 id를 알아낸 뒤 id로 호출해라. " +
+  "삭제는 노션 휴지통으로 보내는 것이라 되돌릴 수 있지만, 그래도 어떤 행을 지울지 id를 정확히 확인하고 호출해라. " +
+  "행을 가릴 때는 제목 컬럼(예: 식단의 '식사' = 아침/점심/저녁)과 날짜로 찾아라. " +
+  "어떤 칸(예: '음식')이 비어 있어도 그 행이 '없는 것'이 아니다. 빈 값은 그냥 비어 있을 뿐, 행은 존재한다. " +
+  '예: 오늘 "아침" 행이 있는데 음식이 비어 있으면, 그 행은 분명히 존재하므로 "아침 기록이 없다"고 하지 말고 그 행을 삭제 대상으로 삼아라. ' +
   "쓰기는 실행 직전에 시스템이 사용자에게 y/N로 한 번 확인을 받는다. " +
   "그러니 너는 '이렇게 추가할까요?' 같은 확인 질문을 따로 하지 말고, 필요한 정보가 다 있으면 바로 도구를 호출해라. " +
   "정보가 부족할 때만(예: 어떤 행을 고칠지 불명확) 되물어라.";
@@ -290,11 +333,19 @@ const COMPLEX_HINTS = [
   "왜", "이유", "원인", "평가", "추천", "예측", "전망", "인사이트", "개선",
 ];
 
+// 데이터를 바꾸는(수정/삭제) 의도가 보이면 상위 모델로 올린다.
+// 어떤 행을 고치고 지울지 정확히 가려내는 판단이 필요하고, 되돌리기 번거로운 작업이라
+// 약한 모델이 빈 칸을 "기록 없음"으로 오판하는 식의 실수를 막는다. (조회/추가는 그대로 Haiku)
+const WRITE_HINTS = [
+  "삭제", "지워", "지울", "제거", "없애", "수정", "고쳐", "바꿔", "변경",
+];
+
 // 질문을 보고 어떤 모델로 처리할지 고른다. (추가 API 호출 없이 키워드만으로 판단 → 비용 0)
 function pickModel(question: string): string {
-  return COMPLEX_HINTS.some((w) => question.includes(w))
-    ? MODEL_COMPLEX
-    : MODEL_SIMPLE;
+  const needsComplex =
+    COMPLEX_HINTS.some((w) => question.includes(w)) ||
+    WRITE_HINTS.some((w) => question.includes(w));
+  return needsComplex ? MODEL_COMPLEX : MODEL_SIMPLE;
 }
 
 // ── 토큰 사용량 모니터링 ──────────────────────────────────────
