@@ -245,7 +245,9 @@ async function printWritePreview(name: string, input: any): Promise<void> {
 }
 
 // ── 4) 에이전트: 질문 하나를 끝까지 처리 ────────────────────────
-const today = new Date().toISOString().slice(0, 10); // "2026-06-03"
+// toISOString()은 UTC 기준이라 KST 새벽~오전엔 어제 날짜가 나온다.
+// 한국 시간대로 포맷해야 "오늘"이 실제 오늘이 된다. (en-CA = YYYY-MM-DD)
+const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }); // "2026-06-18"
 
 const system =
   "너는 사용자의 노션 가계부/운동/식단 데이터를 분석하는 비서야. " +
