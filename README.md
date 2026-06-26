@@ -4,7 +4,7 @@
 
 "이번 달 식비 얼마야?", "지난주 운동 목표 달성률 분석해줘"처럼 한국어로 물으면 끝입니다.
 Claude가 **어떤 노션 DB를 어떤 기간으로 조회할지 스스로 판단해(tool use)** 데이터를 모으고 분석해 답합니다.
-조회뿐 아니라 새 기록 추가·수정, 그리고 **주간 회고 리포트 자동 생성**까지 합니다.
+조회뿐 아니라 새 기록 추가·수정·삭제, 그리고 **주간 회고 리포트 자동 생성**까지 합니다.
 
 ```text
 질문> 지난주 운동 목표 달성률 분석해줘
@@ -43,8 +43,8 @@ DB를 하나 추가할 때마다 조회 코드·쓰기 코드·도구 설명을 
 
 ### 3. 운영 — 안전한 쓰기와 무인 자동화
 
-- **쓰기 가드레일** — 조회는 마음껏 하되, 데이터를 바꾸는 추가·수정은 실행 직전에 "무엇을 → 어떤 값으로" 바꿀지 보여주고 `y/N` 확인을 받습니다. 수정 시에는 기존 값을 읽어와 `기존 → 새값`으로 대조해 줍니다.
-- **주간 리포트 자동화** — GitHub Actions가 매주 일요일 21시(KST)에 지난 7일 데이터를 모아 Claude에게 분석을 받고, 노션 "리포트" DB에 회고 페이지로 저장합니다. 사람 개입이 없는 1회성 배치라 REPL과 코드 경로를 분리했습니다.
+- **쓰기 가드레일** — 조회는 마음껏 하되, 데이터를 바꾸는 추가·수정·삭제는 실행 직전에 "무엇을 → 어떤 값으로" 바꿀지 보여주고 `y/N` 확인을 받습니다. 수정 시에는 기존 값을 읽어와 `기존 → 새값`으로 대조해 줍니다.
+- **주간 리포트 자동화** — GitHub Actions가 매주 월요일 오전 9시(KST)에 전주(지난주 월~일) 데이터를 모아 Claude에게 분석을 받고, 노션 "리포트" DB에 회고 페이지로 저장합니다. 사람 개입이 없는 1회성 배치라 REPL과 코드 경로를 분리했습니다.
 
 <br>
 
@@ -56,15 +56,19 @@ Node.js (ESM) · TypeScript (strict) · [`@anthropic-ai/sdk`](https://www.npmjs.
 
 ```text
 src/
-├── index.ts          # 대화형(REPL) 에이전트 — 도구 루프 + 모델 라우팅 + 캐싱
-├── report.ts         # 주간 리포트 배치 (스케줄러용)
+├── index.ts            # 대화형(REPL) 에이전트 — 도구 루프 + 모델 라우팅 + 캐싱
+├── report.ts           # 주간 리포트 배치 (스케줄러용)
+├── portfolio-draft.ts  # 포트폴리오 초안 생성 (노션 → 검수용 JSON, 수동 실행)
+├── site.ts             # 검수된 JSON → 정적 HTML 빌드 (GitHub Pages 배포)
+├── content/            # 검수·확정된 포트폴리오 콘텐츠 (JSON)
 └── notion/
-    ├── schema.ts     # ★ 모든 DB의 컬럼·타입·데이터소스 (단일 진실 공급원)
-    ├── query.ts      # 공통 조회
-    ├── props.ts      # 속성 파싱
-    ├── mutate.ts     # 추가·수정
-    └── *.ts          # DB별 리더 (target, diet, workout, study, expense,
-                       #            diary, weight, techstack, project, application)
+    ├── schema.ts       # ★ 모든 DB의 컬럼·타입·데이터소스 (단일 진실 공급원)
+    ├── query.ts        # 공통 조회
+    ├── props.ts        # 속성 파싱
+    ├── mutate.ts       # 추가·수정·삭제
+    ├── render.ts       # 노션 페이지 본문 → HTML 변환
+    └── *.ts            # DB별 리더 (target, diet, workout, study, expense,
+                         #            diary, weight, techstack, project, application)
 ```
 
 ## 실행
@@ -75,6 +79,8 @@ cp .env.example .env   # ANTHROPIC_API_KEY, NOTION_API_KEY, NOTION_*_DATA_SOURCE
 
 npm run dev            # 대화형 비서 (REPL 명령어: help / db / token / clear / exit)
 npm run report         # 주간 리포트 수동 생성
+npm run portfolio      # 포트폴리오 콘텐츠 초안 생성 (노션 → 검수용 JSON)
+npm run site           # 검수된 JSON → 정적 HTML 빌드 (GitHub Pages 배포물)
 ```
 
 
