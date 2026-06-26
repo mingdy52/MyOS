@@ -55,10 +55,16 @@ function toBlocks(text: string): any[] {
 }
 
 async function main() {
-  // 기간: 오늘 포함 지난 7일 (오늘-6 ~ 오늘)
-  const to = new Date();
+  // 기간: 전주 = 지난주 월요일 ~ 지난주 일요일 (7일)
+  // 월요일 새벽에 돌지만, 수동 실행 등 어떤 요일에 돌려도 항상 "직전 완결된 한 주"가 잡히도록
+  // 오늘 요일을 기준으로 이번 주 월요일을 구한 뒤, 거기서 한 주 앞으로 물러난다.
+  // getDay(): 0=일 1=월 … 6=토. (월요일까지의 거리) = (getDay()+6)%7  → 월=0, 일=6
+  const now = new Date();
+  const daysSinceMonday = (now.getDay() + 6) % 7;
+  const to = new Date(now);
+  to.setDate(now.getDate() - daysSinceMonday - 1); // 지난주 일요일 (이번 주 월요일 - 1)
   const from = new Date(to);
-  from.setDate(to.getDate() - 6);
+  from.setDate(to.getDate() - 6);                  // 지난주 월요일
   const fromStr = iso(from);
   const toStr = iso(to);
   const title = `${korean(from)} ~ ${korean(to)}`;
