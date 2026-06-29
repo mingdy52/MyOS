@@ -6,7 +6,7 @@ import { getDietRecords } from "./notion/diet.js";
 import { getWorkoutRecords } from "./notion/workout.js";
 import { getStudyRecords } from "./notion/study.js";
 import { getExpenses } from "./notion/expense.js";
-import { getDiaryRecords } from "./notion/diary.js";
+import { getDiaryRecords, getDiaryDetails } from "./notion/diary.js";
 import { getWeightRecords } from "./notion/weight.js";
 import { getDecisionRecords } from "./notion/decision.js";
 
@@ -79,9 +79,19 @@ const registry: Record<string, ToolDef> = {
     run: (i) => getExpenses(i.from, i.to, i.category),
   },
   get_diaries: {
-    description: "일기 기록(기분/에너지/스트레스)을 조회한다. 기간(from/to)으로 거를 수 있다.",
+    description:
+      "일기의 제목·날짜·감정지표(기분/에너지/스트레스)만 조회한다. 기간(from/to)으로 거를 수 있다. " +
+      "주의: 일기 '본문'(페이지에 쓴 자유 서술)은 안 들어온다. 본문이 필요하면 get_diary_details를 써라.",
     properties: { ...dateRange },
     run: (i) => getDiaryRecords(i.from, i.to),
+  },
+  get_diary_details: {
+    description:
+      "일기를 본문(페이지에 직접 쓴 자유 서술)까지 포함해 조회한다. 기간(from/to)으로 거를 수 있다. " +
+      "일기 내용에서 결정·사건을 찾는 등 본문이 필요할 때 쓴다. " +
+      "일기마다 본문을 따로 읽어 get_diaries보다 느리니 기간을 좁게 잡아라.",
+    properties: { ...dateRange },
+    run: (i) => getDiaryDetails(i.from, i.to),
   },
   get_weights: {
     description: "체중 기록을 조회한다. 기간(from/to)으로 거를 수 있다.",
@@ -326,7 +336,8 @@ const system =
   // 일기 → 의사결정 로그 작성 워크플로우
   // (사용자는 일기를 노션에 직접 쓰고, 비서에서는 명령으로 이 분석을 돌린다.)
   "[일기로 의사결정 로그 만들기] 사용자가 '오늘 일기 분석해서 결정 기록해줘'처럼 요청하면 이렇게 한다: " +
-  "(1) get_diaries로 해당 날짜(보통 오늘)의 일기를 먼저 읽는다. 일기는 사용자가 노션에 직접 써 둔 것이다. " +
+  "(1) get_diary_details로 해당 날짜(보통 오늘)의 일기를 본문까지 읽는다. " +
+  "일기의 실제 내용은 '본문' 필드에 있다(get_diaries는 감정지표만 주니 쓰지 마라). 일기는 사용자가 노션에 직접 써 둔 것이다. " +
   "(2) 그 일기 본문에서 사용자가 '내린 결정'을 찾는다. 하루에 결정이 여러 개일 수 있으니 보이는 만큼 다 뽑는다. " +
   "결정으로 볼 만한 게 없으면 지어내지 말고 '그날 일기엔 기록할 결정이 안 보인다'고 솔직히 답한다. " +
   "(3) 중복 방지: 행을 만들기 전에 get_decisions로 그 날짜의 기존 결정들을 읽어, " +
@@ -533,8 +544,9 @@ function printHelp(): void {
   console.log("   help          이 도움말 보기");
   console.log("   db            DB 목록 보기");
   console.log("   db <이름>     그 DB의 컬럼(스키마) 보기");
-  console.log("   /decide        오늘 일기를 분석해 의사결정 로그 작성");
-  console.log("   /decide <날짜>  그 날짜(YYYY-MM-DD) 일기로 의사결정 로그 작성");
+  console.log("   /decide              오늘 일기를 분석해 의사결정 로그 작성");
+  console.log("   /decide <날짜>       그 날짜(YYYY-MM-DD) 일기로 작성");
+  console.log("   /decide <부터> <까지> 그 기간 일기를 몰아서 작성");
   console.log("   token         이번 세션 누적 토큰 사용량 보기");
   console.log("   clear         대화 기록·조회 캐시 비우기");
   console.log("   exit          종료 (Ctrl+C 도 가능)");
@@ -575,9 +587,13 @@ while (true) {
   // 일기는 노션에 직접 써 두고, 이 명령으로 분석만 돌린다. (인자 없으면 오늘)
   // 결국 ask()에 정해진 질문을 흘려보내는 단축키라, 도구 호출·쓰기 y/N 확인 흐름을 그대로 탄다.
   if (question === "/decide" || question.startsWith("/decide ")) {
-    const day = question.slice("/decide".length).trim() || todayKST();
+    // 인자 0개 → 오늘 하루, 1개 → 그날 하루, 2개 → from~to 기간(밀린 일기 몰아서 처리).
+    const args = question.slice("/decide".length).trim().split(/\s+/).filter(Boolean);
+    const from = args[0] || todayKST();
+    const to = args[1] || from;
+    const span = from === to ? `${from} 일기를` : `${from}부터 ${to}까지의 일기를`;
     const prompt =
-      `${day} 일기를 get_diaries로 읽고 분석해서, 그날 내가 내린 결정들을 ` +
+      `${span} get_diary_details로 본문까지 읽고 분석해서, 그동안 내가 내린 결정들을 ` +
       `의사결정 로그(decision)에 기록해줘. 하루에 결정이 여러 개면 다 뽑되, ` +
       `같은 날 같은 결정(제목)이 이미 있으면 그건 건너뛰어.`;
     console.log();
