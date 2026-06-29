@@ -284,13 +284,17 @@ async function printWritePreview(name: string, input: any): Promise<void> {
 }
 
 // ── 4) 에이전트: 질문 하나를 끝까지 처리 ────────────────────────
+// 오늘 날짜를 KST로 구한다. 질문할 때마다 새로 호출해야 REPL을 자정 넘겨
+// 켜둬도 "오늘"이 어제로 굳지 않는다.
 // toISOString()은 UTC 기준이라 KST 새벽~오전엔 어제 날짜가 나온다.
 // 한국 시간대로 포맷해야 "오늘"이 실제 오늘이 된다. (en-CA = YYYY-MM-DD)
-const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }); // "2026-06-18"
+function todayKST(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }); // "2026-06-18"
+}
 
 const system =
   "너는 사용자의 노션 가계부/운동/식단 데이터를 분석하는 비서야. " +
-  `오늘 날짜는 ${today}야. "이번달", "지난주" 같은 표현은 오늘을 기준으로 ` +
+  '"이번달", "지난주" 같은 표현은 오늘을 기준으로 ' +
   "실제 날짜 범위(YYYY-MM-DD)로 바꿔서 도구를 호출해. " +
   "답에 필요한 데이터가 있으면 사용자에게 물어보지 말고, 관련 도구를 알아서 모두 호출해서 먼저 확인해. " +
   "조회(읽기)는 허락 없이 마음껏 해도 된다. " +
@@ -309,12 +313,17 @@ const system =
   "그러니 너는 '이렇게 추가할까요?' 같은 확인 질문을 따로 하지 말고, 필요한 정보가 다 있으면 바로 도구를 호출해라. " +
   "정보가 부족할 때만(예: 어떤 행을 고칠지 불명확) 되물어라.";
 
-// 시스템 프롬프트는 매 호출마다 똑같이 들어가므로 prompt caching으로 묶는다.
-// (전송 순서가 tools → system 이라, 마지막 system 블록 한 곳만 표시해도 tools까지 함께 캐싱된다.)
+// 정적 지시문은 매 호출마다 똑같으므로 prompt caching으로 묶는다.
+// (전송 순서가 tools → system 이라, 이 블록에 브레이크포인트를 걸면 tools까지 함께 캐싱된다.)
 // 두 번째 호출부터 이 부분이 cache_read 로 잡혀 거의 공짜(정가의 ~10%)로 처리된다 → 토큰 절감.
-const cachedSystem: Anthropic.TextBlockParam[] = [
-  { type: "text", text: system, cache_control: { type: "ephemeral" } },
-];
+// 날짜만 매번 바뀌므로 캐시 블록 "뒤"에 따로 붙인다: 정적 캐시는 그대로 유지되고,
+// 같은 날엔 날짜도 동일해 캐시가 계속 먹는다. 자정을 넘긴 첫 질문에서만 갱신된다.
+function buildSystem(): Anthropic.TextBlockParam[] {
+  return [
+    { type: "text", text: system, cache_control: { type: "ephemeral" } },
+    { type: "text", text: `오늘 날짜는 ${todayKST()}야.` },
+  ];
+}
 
 // 대화 기록. API는 상태가 없어서 매번 전체 기록을 보낸다.
 // 함수 밖(모듈 수준)에 두면 질문 사이에도 유지돼서 "후속 질문"이 가능하다.
@@ -403,6 +412,9 @@ function withConversationCache(
 async function ask(userQuestion: string): Promise<void> {
   messages.push({ role: "user", content: userQuestion });
 
+  // 이번 질문 시작 시점의 날짜로 system을 만든다(도구 루프 내내 동일하게 사용).
+  const system = buildSystem();
+
   // 이번 질문을 처리할 모델을 한 번 정해서, 도구 호출 루프 내내 같은 모델을 쓴다.
   const model = pickModel(userQuestion);
   const label = model === MODEL_COMPLEX ? "Sonnet · 복잡 분석" : "Haiku · 간단 조회";
@@ -416,7 +428,7 @@ async function ask(userQuestion: string): Promise<void> {
     const response = await anthropic.messages.create({
       model,
       max_tokens: 16000,
-      system: cachedSystem, // prompt caching: system+tools를 캐시로 묶어 재전송 비용을 줄인다.
+      system, // prompt caching: 정적 지시문+tools를 캐시로 묶고, 날짜만 캐시 뒤에 붙여 재전송 비용을 줄인다.
       tools,
       messages: withConversationCache(messages), // 대화 기록도 캐시로 재사용.
     });
