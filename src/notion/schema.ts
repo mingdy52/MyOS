@@ -93,6 +93,20 @@ export const schemas: Record<string, DbSchema> = {
       체중: "title",
     },
   },
+  // 의사결정 로그 — 어떤 선택을 왜 했고, 대안은 뭐였고, 나중에 얼마나 만족했는지.
+  // 가치관·판단 패턴을 보려고 쌓는다.
+  decision: {
+    dataSourceId: process.env.NOTION_DECISION_DATA_SOURCE_ID!,
+    columns: {
+      결정: "title",
+      분야: "select",
+      날짜: "date",
+      이유: "text",
+      대안: "text",
+      교훈: "text",
+      만족도: "select",
+    },
+  },
   techstack: {
     dataSourceId: process.env.NOTION_TECHSTACK_DATA_SOURCE_ID!,
     columns: {

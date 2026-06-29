@@ -1,0 +1,10 @@
+import { queryDataSource, dateRange } from "./query.js";
+
+// dataSourceId와 컬럼 매핑은 schema.ts의 decision에서 자동으로 가져온다.
+export function getDecisionRecords(from?: string, to?: string) {
+  return queryDataSource({
+    database: "decision",
+    sortBy: "날짜",
+    filters: dateRange("날짜", from, to),
+  });
+}

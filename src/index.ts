@@ -8,6 +8,7 @@ import { getStudyRecords } from "./notion/study.js";
 import { getExpenses } from "./notion/expense.js";
 import { getDiaryRecords } from "./notion/diary.js";
 import { getWeightRecords } from "./notion/weight.js";
+import { getDecisionRecords } from "./notion/decision.js";
 
 import { getTechStacks } from "./notion/techstack.js";
 import { getProjects } from "./notion/project.js";
@@ -86,6 +87,13 @@ const registry: Record<string, ToolDef> = {
     description: "체중 기록을 조회한다. 기간(from/to)으로 거를 수 있다.",
     properties: { ...dateRange },
     run: (i) => getWeightRecords(i.from, i.to),
+  },
+  get_decisions: {
+    description:
+      "의사결정 로그(결정/분야/이유/대안/교훈/만족도)를 조회한다. 기간(from/to)으로 거를 수 있다. " +
+      "가치관·판단 패턴을 묻는 질문에 쓴다.",
+    properties: { ...dateRange },
+    run: (i) => getDecisionRecords(i.from, i.to),
   },
   get_techstacks: {
     description: "보유 기술 스택(기술/수준/자신감)을 조회한다. 날짜 개념이 없어 전체를 가져온다.",
@@ -293,7 +301,10 @@ function todayKST(): string {
 }
 
 const system =
-  "너는 사용자의 노션 가계부/운동/식단 데이터를 분석하는 비서야. " +
+  "너는 사용자의 노션 가계부/운동/식단/일기, 그리고 의사결정 로그 데이터를 분석하는 비서야. " +
+  "의사결정 로그(get_decisions)에는 어떤 결정을 왜 했는지·대안·교훈·만족도가 쌓인다. " +
+  "사용자가 가치관·판단 성향·후회 패턴을 물으면, 여러 결정을 가로질러 보고 " +
+  "반복되는 기준(무엇을 중시하고 무엇을 포기하는지)과 만족도와의 관계를 짚어줘. " +
   '"이번달", "지난주" 같은 표현은 오늘을 기준으로 ' +
   "실제 날짜 범위(YYYY-MM-DD)로 바꿔서 도구를 호출해. " +
   "답에 필요한 데이터가 있으면 사용자에게 물어보지 말고, 관련 도구를 알아서 모두 호출해서 먼저 확인해. " +
@@ -311,7 +322,20 @@ const system =
   '예: 오늘 "아침" 행이 있는데 음식이 비어 있으면, 그 행은 분명히 존재하므로 "아침 기록이 없다"고 하지 말고 그 행을 삭제 대상으로 삼아라. ' +
   "쓰기는 실행 직전에 시스템이 사용자에게 y/N로 한 번 확인을 받는다. " +
   "그러니 너는 '이렇게 추가할까요?' 같은 확인 질문을 따로 하지 말고, 필요한 정보가 다 있으면 바로 도구를 호출해라. " +
-  "정보가 부족할 때만(예: 어떤 행을 고칠지 불명확) 되물어라.";
+  "정보가 부족할 때만(예: 어떤 행을 고칠지 불명확) 되물어라. " +
+  // 일기 → 의사결정 로그 작성 워크플로우
+  // (사용자는 일기를 노션에 직접 쓰고, 비서에서는 명령으로 이 분석을 돌린다.)
+  "[일기로 의사결정 로그 만들기] 사용자가 '오늘 일기 분석해서 결정 기록해줘'처럼 요청하면 이렇게 한다: " +
+  "(1) get_diaries로 해당 날짜(보통 오늘)의 일기를 먼저 읽는다. 일기는 사용자가 노션에 직접 써 둔 것이다. " +
+  "(2) 그 일기 본문에서 사용자가 '내린 결정'을 찾는다. 하루에 결정이 여러 개일 수 있으니 보이는 만큼 다 뽑는다. " +
+  "결정으로 볼 만한 게 없으면 지어내지 말고 '그날 일기엔 기록할 결정이 안 보인다'고 솔직히 답한다. " +
+  "(3) 중복 방지: 행을 만들기 전에 get_decisions로 그 날짜의 기존 결정들을 읽어, " +
+  "'같은 날짜 + 같은 결정(제목)'이 이미 있으면 그 결정만 건너뛴다. 같은 날이라도 제목이 다른 결정은 새로 추가한다. " +
+  "(4) 새 결정마다 create_record(database='decision')로 decision DB 컬럼에 맞춰 채운다 — " +
+  "결정(무엇을 하기로 했는지 짧은 제목/title), 분야(커리어·건강·관계·돈·공부 등에서 적절히/select), 날짜(그 일기 날짜), " +
+  "이유(왜 그렇게 정했는지), 대안(고려했지만 택하지 않은 선택지), 교훈(있으면), 만족도(일기에서 드러나면; 없으면 비워 둔다). " +
+  "(5) 일기 본문에 근거가 있는 내용만 적는다. 추측으로 칸을 억지로 채우지 말고, 모르는 칸은 비워 둔다. " +
+  "쓰기는 어차피 시스템이 y/N로 확인하니, 결정을 찾았으면 (각 결정마다 한 번씩) 바로 create_record를 호출해라.";
 
 // 정적 지시문은 매 호출마다 똑같으므로 prompt caching으로 묶는다.
 // (전송 순서가 tools → system 이라, 이 블록에 브레이크포인트를 걸면 tools까지 함께 캐싱된다.)
@@ -340,6 +364,7 @@ const MODEL_COMPLEX = "claude-sonnet-4-6"; // 복잡 분석용 (상위 모델)
 const COMPLEX_HINTS = [
   "분석", "비교", "달성률", "추세", "추이", "패턴", "상관관계", "상관",
   "왜", "이유", "원인", "평가", "추천", "예측", "전망", "인사이트", "개선",
+  "가치관", "성향", "후회", "교훈",
 ];
 
 // 데이터를 바꾸는(수정/삭제) 의도가 보이면 상위 모델로 올린다.
@@ -508,6 +533,8 @@ function printHelp(): void {
   console.log("   help          이 도움말 보기");
   console.log("   db            DB 목록 보기");
   console.log("   db <이름>     그 DB의 컬럼(스키마) 보기");
+  console.log("   /decide        오늘 일기를 분석해 의사결정 로그 작성");
+  console.log("   /decide <날짜>  그 날짜(YYYY-MM-DD) 일기로 의사결정 로그 작성");
   console.log("   token         이번 세션 누적 토큰 사용량 보기");
   console.log("   clear         대화 기록·조회 캐시 비우기");
   console.log("   exit          종료 (Ctrl+C 도 가능)");
@@ -541,6 +568,21 @@ while (true) {
   // "token" → 이번 세션에 쓴 토큰 누적을 보여준다.
   if (question === "token") {
     console.log(`\n📊 세션 누적 토큰 — ${fmtTokens(session)}\n`);
+    continue;
+  }
+
+  // "/decide" 또는 "/decide <YYYY-MM-DD>" → 그날 일기를 분석해 의사결정 로그를 작성한다.
+  // 일기는 노션에 직접 써 두고, 이 명령으로 분석만 돌린다. (인자 없으면 오늘)
+  // 결국 ask()에 정해진 질문을 흘려보내는 단축키라, 도구 호출·쓰기 y/N 확인 흐름을 그대로 탄다.
+  if (question === "/decide" || question.startsWith("/decide ")) {
+    const day = question.slice("/decide".length).trim() || todayKST();
+    const prompt =
+      `${day} 일기를 get_diaries로 읽고 분석해서, 그날 내가 내린 결정들을 ` +
+      `의사결정 로그(decision)에 기록해줘. 하루에 결정이 여러 개면 다 뽑되, ` +
+      `같은 날 같은 결정(제목)이 이미 있으면 그건 건너뛰어.`;
+    console.log();
+    await ask(prompt);
+    console.log();
     continue;
   }
 
