@@ -1,20 +1,10 @@
 import "dotenv/config";
 import { createInterface } from "node:readline/promises";
 import Anthropic from "@anthropic-ai/sdk";
-import { getTargets } from "./notion/target.js";
-import { getDietRecords } from "./notion/diet.js";
-import { getWorkoutRecords } from "./notion/workout.js";
-import { getStudyRecords } from "./notion/study.js";
-import { getExpenses } from "./notion/expense.js";
-import { getDiaryRecords, getDiaryDetails } from "./notion/diary.js";
-import { getWeightRecords } from "./notion/weight.js";
-import { getDecisionRecords } from "./notion/decision.js";
-
-import { getTechStacks } from "./notion/techstack.js";
-import { getProjects } from "./notion/project.js";
-import { getApplications } from "./notion/application.js";
-
 import { schemas } from "./notion/schema.js";
+import { syncSchemas } from "./notion/schema-sync.js";
+// 모든 조회는 이 공용 함수 하나로 처리한다. (예전의 DB별 리더 파일들은 이걸로 대체됨)
+import { getRecords } from "./notion/query.js";
 import {
   createRecord,
   updateRecord,
@@ -48,12 +38,12 @@ const registry: Record<string, ToolDef> = {
   get_targets: {
     description: "목표 기록을 조회한다. 기간(from/to)으로 거를 수 있다.",
     properties: { ...dateRange },
-    run: (i) => getTargets(i.from, i.to),
+    run: (i) => getRecords("target", { from: i.from, to: i.to }),
   },
   get_diets: {
     description: "식단 기록을 조회한다. 기간(from/to)으로 거를 수 있다.",
     properties: { ...dateRange },
-    run: (i) => getDietRecords(i.from, i.to),
+    run: (i) => getRecords("diet", { from: i.from, to: i.to }),
   },
   get_workouts: {
     description: "운동 기록을 조회한다. 기간과 운동 이름(예: 수영)으로 거를 수 있다.",
@@ -61,12 +51,17 @@ const registry: Record<string, ToolDef> = {
       ...dateRange,
       exercise: { type: "string", description: '운동 이름 필터. 예: "수영"' },
     },
-    run: (i) => getWorkoutRecords(i.from, i.to, i.exercise),
+    run: (i) =>
+      getRecords("workout", {
+        from: i.from,
+        to: i.to,
+        ...(i.exercise && { contains: { column: "운동", value: i.exercise } }),
+      }),
   },
   get_studies: {
     description: "공부·작업 기록(한 일/시간/집중도/기술)을 조회한다. 기간(from/to)으로 거를 수 있다.",
     properties: { ...dateRange },
-    run: (i) => getStudyRecords(i.from, i.to),
+    run: (i) => getRecords("study", { from: i.from, to: i.to }),
   },
   get_expenses: {
     description:
@@ -76,14 +71,20 @@ const registry: Record<string, ToolDef> = {
       ...dateRange,
       category: { type: "string", description: '유형 필터. 예: "식비"' },
     },
-    run: (i) => getExpenses(i.from, i.to, i.category),
+    run: (i) =>
+      getRecords("expense", {
+        from: i.from,
+        to: i.to,
+        ...(i.category && { contains: { column: "유형", value: i.category } }),
+      }),
   },
   get_diaries: {
     description:
       "일기의 제목·날짜·감정지표(기분/에너지/스트레스)만 조회한다. 기간(from/to)으로 거를 수 있다. " +
       "주의: 일기 '본문'(페이지에 쓴 자유 서술)은 안 들어온다. 본문이 필요하면 get_diary_details를 써라.",
     properties: { ...dateRange },
-    run: (i) => getDiaryRecords(i.from, i.to),
+    // 일기는 본문형(hasBody)이지만, 여기선 감정지표만 필요하므로 withBody=false로 본문을 끈다(빠름).
+    run: (i) => getRecords("diary", { from: i.from, to: i.to, withBody: false }),
   },
   get_diary_details: {
     description:
@@ -91,33 +92,66 @@ const registry: Record<string, ToolDef> = {
       "일기 내용에서 결정·사건을 찾는 등 본문이 필요할 때 쓴다. " +
       "일기마다 본문을 따로 읽어 get_diaries보다 느리니 기간을 좁게 잡아라.",
     properties: { ...dateRange },
-    run: (i) => getDiaryDetails(i.from, i.to),
+    run: (i) => getRecords("diary", { from: i.from, to: i.to, withBody: true }),
   },
   get_weights: {
     description: "체중 기록을 조회한다. 기간(from/to)으로 거를 수 있다.",
     properties: { ...dateRange },
-    run: (i) => getWeightRecords(i.from, i.to),
+    run: (i) => getRecords("weight", { from: i.from, to: i.to }),
   },
   get_decisions: {
     description:
       "의사결정 로그(결정/분야/이유/대안/교훈/만족도)를 조회한다. 기간(from/to)으로 거를 수 있다. " +
       "가치관·판단 패턴을 묻는 질문에 쓴다.",
     properties: { ...dateRange },
-    run: (i) => getDecisionRecords(i.from, i.to),
+    run: (i) => getRecords("decision", { from: i.from, to: i.to }),
   },
   get_techstacks: {
     description: "보유 기술 스택(기술/수준/자신감)을 조회한다. 날짜 개념이 없어 전체를 가져온다.",
-    run: () => getTechStacks(),
+    run: () => getRecords("techstack"),
   },
   get_projects: {
     description: "프로젝트 목록(상태/역할/기술/기간)을 조회한다. 날짜 개념이 없어 전체를 가져온다.",
-    run: () => getProjects(),
+    run: () => getRecords("project"),
   },
   get_applications: {
     description:
       "입사 지원 현황(회사/직무/상태/지원일)을 조회한다. 지원일 기준 기간(from/to)으로 거를 수 있다.",
     properties: { ...dateRange },
-    run: (i) => getApplications(i.from, i.to),
+    run: (i) => getRecords("application", { from: i.from, to: i.to }),
+  },
+
+  // 범용 조회 — 전용 도구(get_diaries 등)가 없는 DB나, 노션에 새로 추가돼
+  // 동적 발견으로 잡힌 DB를 이름으로 조회한다. 그 DB에 날짜 컬럼이 있으면
+  // 기간(from/to)으로 거르고 최신순 정렬한다(없으면 전체를 가져온다).
+  // 전용 도구가 있는 DB는 그쪽이 더 낫다(특수 필터·본문 읽기 등이 있으므로).
+  get_records: {
+    description:
+      "아무 DB나 이름(database)으로 조회하는 범용 도구다. " +
+      "전용 도구가 없는 DB나 새로 추가된 DB를 읽을 때 쓴다. " +
+      "그 DB에 날짜 컬럼이 있으면 기간(from/to)으로 거를 수 있다. " +
+      // [본문] 본문형 DB(제목이 '+'로 끝남)는 자동으로 본문까지 딸려온다 → 보통 withBody를 만질 필요 없다.
+      // 표시가 안 된 DB인데 자유 서술 내용이 필요한 예외 상황만 아래처럼 재조회로 커버한다.
+      "일기·알고리즘 로그처럼 '페이지 본문'에 자유 서술을 적는 DB는 본문이 자동으로 함께 온다. " +
+      "표시되지 않은 DB인데 서술·회고·트레이드오프 같은 본문 내용이 필요한데 조회 결과에 안 보이면(컬럼엔 제목·날짜·분류뿐이면) " +
+      "그 DB를 withBody=true로 다시 조회하라. 반대로 본문이 필요 없는 집계·통계엔 withBody=false로 꺼서 빠르게 조회한다. " +
+      "쓸 수 있는 DB: " +
+      Object.keys(schemas).join(", "),
+    properties: {
+      database: {
+        type: "string",
+        enum: Object.keys(schemas),
+        description: "조회할 DB 이름",
+      },
+      ...dateRange,
+      withBody: {
+        type: "boolean",
+        description:
+          "true면 각 행의 페이지 본문(자유 서술)까지 읽는다. 본문 내용이 필요한 질문일 때만 켠다.",
+      },
+    },
+    run: (i) =>
+      getRecords(i.database, { from: i.from, to: i.to, withBody: i.withBody }),
   },
 
   // ── 쓰기 도구(삽입/수정) ──────────────────────────────
@@ -553,6 +587,7 @@ function printHelp(): void {
   console.log("   /decide <날짜>       그 날짜(YYYY-MM-DD) 일기로 작성");
   console.log("   /decide <부터> <까지> 그 기간 일기를 몰아서 작성");
   console.log("   token         이번 세션 누적 토큰 사용량 보기");
+  console.log("   refresh       노션에서 DB 스키마 다시 발견(새 DB·컬럼 반영)");
   console.log("   clear         대화 기록·조회 캐시 비우기");
   console.log("   exit          종료 (Ctrl+C 도 가능)");
   console.log("   그 외 입력    질문으로 처리\n");
@@ -585,6 +620,17 @@ while (true) {
   // "token" → 이번 세션에 쓴 토큰 누적을 보여준다.
   if (question === "token") {
     console.log(`\n📊 세션 누적 토큰 — ${fmtTokens(session)}\n`);
+    continue;
+  }
+
+  // "refresh" → 노션 부모 페이지를 다시 훑어 스키마 캐시를 갱신한다.
+  // 노션에서 DB를 새로 만들었거나 컬럼을 바꿨을 때만 쓰면 된다(평소엔 캐시라 네트워크 0).
+  // 이미 만들어진 조회/쓰기 도구 설명(enum)은 다음 실행부터 새 DB를 반영한다.
+  if (question === "refresh") {
+    console.log();
+    await syncSchemas(schemas, { refresh: true });
+    console.log(`\n📋 현재 DB: ${Object.keys(schemas).join(", ")}`);
+    console.log("   (새로 생긴 DB를 조회/쓰기 도구에도 노출하려면 한 번 재시작하세요.)\n");
     continue;
   }
 

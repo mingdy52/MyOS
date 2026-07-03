@@ -5,13 +5,7 @@ import "dotenv/config";
 import Anthropic from "@anthropic-ai/sdk";
 import { notion } from "./notion/client.js";
 import { schemas } from "./notion/schema.js";
-import { getTargets } from "./notion/target.js";
-import { getExpenses } from "./notion/expense.js";
-import { getDietRecords } from "./notion/diet.js";
-import { getWorkoutRecords } from "./notion/workout.js";
-import { getStudyRecords } from "./notion/study.js";
-import { getDiaryRecords } from "./notion/diary.js";
-import { getWeightRecords } from "./notion/weight.js";
+import { getRecords } from "./notion/query.js";
 
 const anthropic = new Anthropic();
 const MODEL = "claude-sonnet-4-6"; // 분석이 필요하니 상위 모델을 쓴다.
@@ -75,13 +69,14 @@ async function main() {
   // 목표(targets)만은 기간 필터 없이 전체를 가져온다 — 목표는 계속 유지되는 항목이라,
   // 이번 주 활동과 대조해 진행률을 추정하는 데 쓴다.
   const [targets, expenses, diet, workout, study, diary, weight] = await Promise.all([
-    getTargets(),
-    getExpenses(fromStr, toStr),
-    getDietRecords(fromStr, toStr),
-    getWorkoutRecords(fromStr, toStr),
-    getStudyRecords(fromStr, toStr),
-    getDiaryRecords(fromStr, toStr),
-    getWeightRecords(fromStr, toStr),
+    getRecords("target"),
+    getRecords("expense", { from: fromStr, to: toStr }),
+    getRecords("diet", { from: fromStr, to: toStr }),
+    getRecords("workout", { from: fromStr, to: toStr }),
+    getRecords("study", { from: fromStr, to: toStr }),
+    // 일기는 본문형(일기+)이지만 리포트엔 감정지표만 쓰므로 본문은 끈다(빠르게).
+    getRecords("diary", { from: fromStr, to: toStr, withBody: false }),
+    getRecords("weight", { from: fromStr, to: toStr }),
   ]);
   const data = { 기간: title, 목표: targets, 지출: expenses, 식단: diet, 운동: workout, 공부: study, 일기: diary, 체중: weight };
 

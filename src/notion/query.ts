@@ -1,6 +1,8 @@
 import { notion } from "./client.js";
 import { schemas } from "./schema.js";
+import type { FieldType } from "./schema.js";
 import { readProperty } from "./props.js";
+import { getPageText } from "./blocks.js";
 
 // 스키마(컬럼 → 타입)만 보고, 한 행(props)을 읽어 객체로 만드는 map 함수를 자동으로 만든다.
 // 리더가 getTitle/getNumber... 를 나열할 필요가 없어진다. (queryDataSource가 database를 받으면 내부에서 호출)
@@ -62,4 +64,62 @@ export function dateRange(property: string, from?: string, to?: string) {
   if (from) conds.push({ property, date: { on_or_after: from } });
   if (to) conds.push({ property, date: { on_or_before: to } });
   return conds;
+}
+
+// 컬럼 타입에 맞는 '부분검색(contains)' 필터를 만든다.
+// 운동 이름(title 안에 글자 포함)·지출 유형(multi_select 포함) 같은 걸 거를 때 쓴다.
+function containsFilter(type: FieldType | undefined, column: string, value: string) {
+  switch (type) {
+    case "multi_select":
+      return { property: column, multi_select: { contains: value } };
+    case "title":
+      return { property: column, title: { contains: value } };
+    case "select":
+      return { property: column, select: { equals: value } };
+    default: // text 등
+      return { property: column, rich_text: { contains: value } };
+  }
+}
+
+// 모든 조회의 단일 진입점. (예전엔 DB마다 리더 파일이 하나씩 있었지만, 이제 이 함수 하나로 통일.)
+//  - 그 DB에 날짜 컬럼이 있으면 그 컬럼으로 기간(from/to) 필터 + 최신순 정렬을 자동으로 건다.
+//  - contains를 주면 그 컬럼을 부분검색으로 거른다(예: 운동="수영", 지출 유형="식비").
+//  - 본문형 DB(제목이 '+'라 hasBody=true)이거나 withBody=true면 각 행의 페이지 본문까지 읽어 붙인다.
+//    (withBody를 명시하면 hasBody보다 우선한다. 집계 질문 등에서 false로 꺼 빠르게 조회 가능.)
+export async function getRecords(
+  database: string,
+  opts: {
+    from?: string;
+    to?: string;
+    withBody?: boolean;
+    contains?: { column: string; value: string };
+  } = {}
+) {
+  const schema = schemas[database];
+  if (!schema) throw new Error(`알 수 없는 데이터베이스: ${database}`);
+
+  // 날짜 컬럼(보통 DB당 하나)을 찾아 정렬·기간 필터에 쓴다.
+  const dateColumn = Object.entries(schema.columns).find(
+    ([, type]) => type === "date"
+  )?.[0];
+
+  const filters: any[] = [];
+  if (dateColumn) filters.push(...dateRange(dateColumn, opts.from, opts.to));
+  if (opts.contains?.value) {
+    const { column, value } = opts.contains;
+    filters.push(containsFilter(schema.columns[column], column, value));
+  }
+
+  const rows: any[] = await queryDataSource({
+    database,
+    ...(dateColumn && { sortBy: dateColumn }),
+    filters,
+  });
+
+  const includeBody = opts.withBody ?? schema.hasBody ?? false;
+  if (!includeBody) return rows;
+  // 본문까지: 행마다 페이지 본문을 읽어 '본문' 필드로 붙인다(일기·알고리즘 로그 등).
+  return Promise.all(
+    rows.map(async (row) => ({ ...row, 본문: await getPageText(row.id) }))
+  );
 }

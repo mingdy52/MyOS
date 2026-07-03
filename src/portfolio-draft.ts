@@ -6,8 +6,7 @@
 import "dotenv/config";
 import Anthropic from "@anthropic-ai/sdk";
 import { writeFile, mkdir } from "node:fs/promises";
-import { getTechStacks } from "./notion/techstack.js";
-import { getProjects } from "./notion/project.js";
+import { getRecords } from "./notion/query.js";
 import { renderPageHtml } from "./notion/render.js";
 
 const anthropic = new Anthropic();
@@ -19,7 +18,12 @@ const startOf = (period: string) => String(period ?? "").slice(0, 10);
 
 async function main() {
   console.log("📡 노션 원본을 불러오는 중...");
-  const [techstack, projects] = await Promise.all([getTechStacks(), getProjects()]);
+  // 프로젝트는 본문형(프로젝트+)이지만 상세 본문은 아래 renderPageHtml로 따로 받으므로
+  // 여기선 본문을 끈다(withBody:false) — 중복 조회·불필요한 호출 방지.
+  const [techstack, projects] = await Promise.all([
+    getRecords("techstack"),
+    getRecords("project", { withBody: false }),
+  ]);
   console.log(`   기술 ${techstack.length}개 · 프로젝트 ${projects.length}개`);
 
   // 1) 각 프로젝트 페이지 본문을 HTML로 변환. (id별로 따로 호출)
