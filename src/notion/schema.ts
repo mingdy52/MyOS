@@ -15,16 +15,25 @@ export type FieldType =
   | "checkbox";
 
 export type DbSchema = {
-  // 어느 노션 데이터소스에 쓸지.
+  // 노션에 보이는 이 DB의 제목. 동적 발견(discover.ts)이 이 제목으로 역할과 짝을 맞춘다.
+  // 이 제목의 DB가 부모 페이지에서 발견되면 dataSourceId·columns는 노션 기준으로 덮어써진다.
+  title?: string;
+  // 어느 노션 데이터소스에 쓸지. (발견되면 자동 갱신되고, 발견 안 되는 DB는 이 값을 그대로 쓴다.)
   dataSourceId: string;
-  // 노션 컬럼명 → 타입. (컬럼명은 노션에 보이는 그대로, 띄어쓰기까지 정확히 적는다.)
+  // 노션 컬럼명 → 타입. (발견되면 자동 갱신. 아래 값은 오프라인/발견 실패 시의 기본값(seed)이다.)
   columns: Record<string, FieldType>;
+  // 본문형 DB인가(페이지 본문에 자유 서술을 적는가). 노션 제목이 '+'로 끝나면 발견 시 자동으로 true.
+  // true면 get_records가 기본으로 본문까지 읽는다(일기·알고리즘 로그 등).
+  hasBody?: boolean;
 };
 
 // database 이름(도구 입력) → 스키마.
-// 새 DB는 여기에 한 덩어리만 추가하면 읽기·쓰기 도구가 자동으로 지원한다.
+// 아래는 "정적 seed"다: 노션 발견이 되면 title로 짝지어 dataSourceId·columns가 갱신되고,
+// 부모 페이지 밖에 있어 발견 안 되는 DB(예: 가계부)는 이 값 그대로 동작한다.
+// 부모 페이지에서 새로 발견된 DB는 제목을 키로 자동 추가되므로, 여기에 손대지 않아도 된다.
 export const schemas: Record<string, DbSchema> = {
   expense: {
+    title: "가계부",
     dataSourceId: process.env.NOTION_EXPENSE_DATA_SOURCE_ID!,
     columns: {
       내역: "title",
@@ -37,6 +46,7 @@ export const schemas: Record<string, DbSchema> = {
     },
   },
   diet: {
+    title: "식단",
     dataSourceId: process.env.NOTION_DIET_DATA_SOURCE_ID!,
     columns: {
       날짜: "date",
@@ -45,6 +55,7 @@ export const schemas: Record<string, DbSchema> = {
     },
   },
   target: {
+    title: "목표",
     dataSourceId: process.env.NOTION_TARGET_DATA_SOURCE_ID!,
     columns: {
       목표: "title",
@@ -57,6 +68,7 @@ export const schemas: Record<string, DbSchema> = {
     },
   },
   workout: {
+    title: "운동",
     dataSourceId: process.env.NOTION_WORKOUT_DATA_SOURCE_ID!,
     columns: {
       날짜: "date",
@@ -66,6 +78,7 @@ export const schemas: Record<string, DbSchema> = {
     },
   },
   study: {
+    title: "공부",
     dataSourceId: process.env.NOTION_STUDY_DATA_SOURCE_ID!,
     columns: {
       날짜: "date",
@@ -77,6 +90,7 @@ export const schemas: Record<string, DbSchema> = {
     },
   },
   diary: {
+    title: "일기",
     dataSourceId: process.env.NOTION_DIARY_DATA_SOURCE_ID!,
     columns: {
       날짜: "date",
@@ -87,6 +101,7 @@ export const schemas: Record<string, DbSchema> = {
     },
   },
   weight: {
+    title: "체중",
     dataSourceId: process.env.NOTION_WEIGHT_DATA_SOURCE_ID!,
     columns: {
       날짜: "date",
@@ -96,6 +111,7 @@ export const schemas: Record<string, DbSchema> = {
   // 의사결정 로그 — 어떤 선택을 왜 했고, 대안은 뭐였고, 나중에 얼마나 만족했는지.
   // 가치관·판단 패턴을 보려고 쌓는다.
   decision: {
+    title: "의사결정",
     dataSourceId: process.env.NOTION_DECISION_DATA_SOURCE_ID!,
     columns: {
       결정: "title",
@@ -108,6 +124,7 @@ export const schemas: Record<string, DbSchema> = {
     },
   },
   techstack: {
+    title: "기술 스택",
     dataSourceId: process.env.NOTION_TECHSTACK_DATA_SOURCE_ID!,
     columns: {
       기술: "title",
@@ -118,6 +135,7 @@ export const schemas: Record<string, DbSchema> = {
     },
   },
   project: {
+    title: "프로젝트",
     dataSourceId: process.env.NOTION_PROJECT_DATA_SOURCE_ID!,
     columns: {
       프로젝트: "title",
@@ -131,6 +149,7 @@ export const schemas: Record<string, DbSchema> = {
     },
   },
   application: {
+    title: "지원 현황",
     dataSourceId: process.env.NOTION_APPLICATION_DATA_SOURCE_ID!,
     columns: {
       회사: "title",
@@ -143,9 +162,19 @@ export const schemas: Record<string, DbSchema> = {
   // 주간 리포트 저장용. 컬럼은 제목(title) 하나뿐이고,
   // AI 분석 요약 본문은 길어서 컬럼이 아니라 페이지 본문에 넣는다(report.ts).
   report: {
+    title: "리포트",
     dataSourceId: process.env.NOTION_REPORT_DATA_SOURCE_ID!,
     columns: {
       제목: "title",
     },
   },
 };
+
+// ── 시작 시 노션에서 스키마를 동적으로 채운다 ─────────────────────────
+// 이 파일을 import 하는 쪽(query/mutate/index)은 top-level await 덕분에
+// 스키마가 준비된 "뒤"에야 이어진다. 평소엔 캐시만 읽어 네트워크 0,
+// NOTION_PARENT_PAGE_ID가 있고 캐시가 없을 때만 페이지를 한 번 훑는다.
+// (schema-sync를 여기서 import하면 순환처럼 보이지만, schema-sync는 이 파일에서
+//  '타입'만 가져오므로 런타임 순환이 아니다.)
+const { syncSchemas } = await import("./schema-sync.js");
+await syncSchemas(schemas);
