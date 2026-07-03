@@ -33,7 +33,7 @@ export type DbSchema = {
 // 부모 페이지에서 새로 발견된 DB는 제목을 키로 자동 추가되므로, 여기에 손대지 않아도 된다.
 export const schemas: Record<string, DbSchema> = {
   expense: {
-    title: "가계부",
+    title: "소비: 내 돈은 어디로 갔을까?",
     dataSourceId: process.env.NOTION_EXPENSE_DATA_SOURCE_ID!,
     columns: {
       내역: "title",

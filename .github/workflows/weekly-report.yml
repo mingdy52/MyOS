@@ -25,11 +25,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-          NOTION_REPORT_DATA_SOURCE_ID: ${{ secrets.NOTION_REPORT_DATA_SOURCE_ID }}
-          NOTION_TARGET_DATA_SOURCE_ID: ${{ secrets.NOTION_TARGET_DATA_SOURCE_ID }}
-          NOTION_EXPENSE_DATA_SOURCE_ID: ${{ secrets.NOTION_EXPENSE_DATA_SOURCE_ID }}
-          NOTION_DIET_DATA_SOURCE_ID: ${{ secrets.NOTION_DIET_DATA_SOURCE_ID }}
-          NOTION_WORKOUT_DATA_SOURCE_ID: ${{ secrets.NOTION_WORKOUT_DATA_SOURCE_ID }}
-          NOTION_STUDY_DATA_SOURCE_ID: ${{ secrets.NOTION_STUDY_DATA_SOURCE_ID }}
-          NOTION_DIARY_DATA_SOURCE_ID: ${{ secrets.NOTION_DIARY_DATA_SOURCE_ID }}
-          NOTION_WEIGHT_DATA_SOURCE_ID: ${{ secrets.NOTION_WEIGHT_DATA_SOURCE_ID }}
+          # 스키마는 부모 페이지에서 동적으로 발견한다. 러너엔 캐시(.cache)가 없으니
+          # 매 실행마다 이 페이지를 훑어 DB들의 dataSourceId·컬럼을 채운다.
+          # → DB별 DATA_SOURCE_ID 시크릿은 더 이상 필요 없다(이 페이지 id 하나면 됨).
+          NOTION_DATA_PAGE_ID: ${{ secrets.NOTION_DATA_PAGE_ID }}
