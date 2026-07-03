@@ -34,12 +34,16 @@ Claude가 **어떤 노션 DB를 어떤 기간으로 조회할지 스스로 판�
 시스템 프롬프트·도구 정의·대화 기록은 매 호출마다 똑같이 들어가므로, 캐시 브레이크포인트를 걸어 **두 번째 호출부터는 정가의 ~10%로 재사용**합니다.
 매 응답마다 토큰 사용량(입력 / 출력 / 캐시 읽기 / 캐시 쓰기)을 출력해, 캐싱이 실제로 먹히는지 눈으로 확인하며 만들었습니다.
 
-### 2. 유지보수 — DB 정의를 한 곳에 모은 스키마 주도 설계
+### 2. 유지보수 — DB를 노션에서 자동 발견하는 스키마 주도 설계
 
-DB를 하나 추가할 때마다 조회 코드·쓰기 코드·도구 설명을 일일이 고치는 건 비효율적입니다.
-그래서 **`schema.ts` 한 파일**에 "이 DB는 어느 데이터소스이고, 어떤 컬럼이 무슨 타입인지"만 정의해 두고, 읽기·쓰기·도구 설명문이 모두 이 한 곳을 바라보게 했습니다.
+DB를 하나 추가할 때마다 데이터소스 id를 `.env`에 적고, 조회·쓰기 코드와 도구 설명을 일일이 고치는 건 비효율적입니다.
+그래서 **모든 DB가 들어있는 부모 페이지 하나**만 알려주면, 앱이 시작할 때 그 페이지를 훑어 안의 DB들(데이터소스 id·컬럼·타입)을 **자동으로 발견**하고 캐시에 저장합니다. 읽기·쓰기·도구 설명문은 모두 이 발견된 스키마를 바라봅니다.
 
-> 새 DB는 `schema.ts`에 한 덩어리만 추가하면 읽기·쓰기가 자동으로 지원됩니다.
+> 새 DB는 **노션에서 만들고 `refresh` 한 번**이면 끝 — 코드·설정을 한 줄도 안 고칩니다.
+
+- **캐시 우선** — 평소엔 캐시만 읽어 네트워크 호출 0. 노션에서 DB·컬럼을 바꿨을 때만 `refresh`로 다시 훑습니다.
+- **본문형 표시** — 제목이 `+`로 끝나는 DB(일기·알고리즘 로그 등)는 "페이지 본문에 자유 서술을 적는 DB"로 인식해, 조회 시 본문까지 함께 읽어옵니다.
+- **단일 조회 진입점** — 모든 읽기는 `getRecords(db, { 기간·필터·본문 })` 하나로 처리해, DB마다 리더 파일을 두지 않습니다.
 
 ### 3. 운영 — 안전한 쓰기와 무인 자동화
 
@@ -62,22 +66,24 @@ src/
 ├── site.ts             # 검수된 JSON → 정적 HTML 빌드 (GitHub Pages 배포)
 ├── content/            # 검수·확정된 포트폴리오 콘텐츠 (JSON)
 └── notion/
-    ├── schema.ts       # ★ 모든 DB의 컬럼·타입·데이터소스 (단일 진실 공급원)
-    ├── query.ts        # 공통 조회
+    ├── discover.ts     # 부모 페이지 → 안의 DB들(데이터소스·컬럼) 자동 발견
+    ├── schema-sync.ts  # 발견 결과를 스키마에 반영 (캐시 우선, refresh로 갱신)
+    ├── schema-cache.ts # 발견 결과 캐시 (.cache/notion-schema.json)
+    ├── schema.ts       # DB 스키마(역할·제목·컬럼) — 발견 실패 시 fallback seed
+    ├── query.ts        # 공통 조회 — getRecords 단일 진입점 (기간·필터·본문)
     ├── props.ts        # 속성 파싱
     ├── mutate.ts       # 추가·수정·삭제
-    ├── render.ts       # 노션 페이지 본문 → HTML 변환
-    └── *.ts            # DB별 리더 (target, diet, workout, study, expense,
-                         #            diary, weight, techstack, project, application)
+    ├── blocks.ts       # 페이지 본문(블록) 텍스트 읽기
+    └── render.ts       # 노션 페이지 본문 → HTML 변환
 ```
 
 ## 실행
 
 ```bash
 npm install
-cp .env.example .env   # ANTHROPIC_API_KEY, NOTION_API_KEY, NOTION_*_DATA_SOURCE_ID
+cp .env.example .env   # ANTHROPIC_API_KEY, NOTION_API_KEY, NOTION_DATA_PAGE_ID
 
-npm run dev            # 대화형 비서 (REPL 명령어: help / db / token / clear / exit)
+npm run dev            # 대화형 비서 (REPL 명령어: help / db / refresh / token / clear / exit)
 npm run report         # 주간 리포트 수동 생성
 npm run portfolio      # 포트폴리오 콘텐츠 초안 생성 (노션 → 검수용 JSON)
 npm run site           # 검수된 JSON → 정적 HTML 빌드 (GitHub Pages 배포물)
