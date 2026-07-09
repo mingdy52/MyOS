@@ -77,7 +77,8 @@ npm test   # *.test.ts (15개)
 
 ```text
 src/
-├── index.ts             # 대화형(REPL) 에이전트 — 도구 루프 + 모델 라우팅 + 캐싱
+├── index.ts             # 대화형(REPL) 껍데기 — 명령 파싱 후 ask()에 위임
+├── agent.ts             # 에이전트 — 도구 루프 + 모델 라우팅 + 캐싱 + 토큰 집계
 ├── model-router.ts      # 질문 → 모델(Haiku/Sonnet) 라우팅 규칙 (순수·테스트 대상)
 ├── model-router.test.ts # ↑ 라우팅 규칙 단위 테스트
 ├── report.ts            # 주간 리포트 배치 (스케줄러용)
