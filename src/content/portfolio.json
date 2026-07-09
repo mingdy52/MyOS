@@ -1,5 +1,5 @@
 {
-  "summary": "Java/Spring 기반 실무 경험과 NestJS·Spring Boot를 활용한 개인·팀 프로젝트 경험을 함께 보유한 백엔드 개발자입니다. 공공기관 시스템 개발부터 여행 다이어리·학습 관리 앱까지 다양한 도메인에서 풀스택 및 백엔드 역할을 맡아왔습니다. 최근에는 TypeScript, NestJS, Supabase 등 현대적인 스택으로 개인 역량을 확장하고 있습니다.",
+  "summary": "Java/Spring 기반 실무 경험을 보유하고 있으며, 개인 및 팀 프로젝트에서 NestJS·Spring Boot·TypeScript 등 다양한 백엔드 스택을 활용해 왔습니다. 공공기관 SI 프로젝트 풀스택 개발 경험과 함께, 여행 다이어리·학습 관리·AI 에이전트 등 실용적인 서비스를 직접 기획하고 구현하는 개발자입니다.",
   "skills": [
     {
       "category": "백엔드",
@@ -9,17 +9,17 @@
         "Spring Boot",
         "NestJS",
         "NodeJS",
-        "TypeScript",
-        "JPA",
+        "JSP",
         "Mybatis",
+        "JPA",
         "Mockito"
       ]
     },
     {
       "category": "프론트엔드",
       "items": [
-        "JSP",
         "Javascript",
+        "TypeScript",
         "JQuery",
         "Nexacro"
       ]
@@ -164,8 +164,8 @@
         "Notion",
         "Github Actions"
       ],
-      "description": "Notion API와 AI Agent를 활용해 개인 데이터를 자동 분석하는 개인 비서 시스템입니다.",
-      "detailHtml": "<p><a href=\"https://github.com/mingdy52/MyOS\" target=\"_blank\" rel=\"noopener\">github-myos</a></p><div class=\"cols\">@@IMG@@@@IMG@@</div><h5>Notion에 흩어진 삶의 기록을 자연어로 묻고 답받고, 매주 자동으로 분석 리포트를 받는 AI 에이전트입니다.</h5><hr><h4>📌 문제 정의</h4><p>Notion에 가계부·운동·식단·공부·일기·목표·지원 현황 등 10개가 넘는 DB를 운영하고 있었지만, 기록이 죽은 데이터로 세 가지 한계가 있었습니다.</p><table><tr><td>문제</td><td>설명</td></tr><tr><td>조회의 마찰</td><td>&quot;이번 달 식비 얼마?&quot;를 알려면 여러 DB를 직접 열어 필터를 걸고 눈으로 합산해야 함</td></tr><tr><td>단편적 데이터</td><td>운동·식단·체중·일기가 따로 존재해 DB를 가로지르는 질문에 답할 수 없음</td></tr><tr><td>회고의 부재</td><td>데이터는 쌓이지만 주기적으로 돌아보는 루틴이 없어 기록이 활용되지 않음</td></tr></table><p>자연어 질문 한 줄로 여러 DB를 조회·통합·분석하고, 묻지 않아도 매주 회고 리포트를 만들어주는 개인 비서가 필요했습니다.</p><hr><h4>📌 핵심 기능</h4><h5><strong>자연어 대화형 비서 (Tool-use Agent)</strong></h5><ul><li>10개 DB를 도구(tool)로 노출, Claude가 질문에 맞는 도구를 스스로 선택·연쇄 호출해 결과를 통합·요약합니다. </li><li>&quot;이번 달/지난주&quot; 같은 표현을 오늘 기준 실제 날짜 범위로 자동 변환하고, &quot;목표 달성률&quot;처럼 여러 DB가 필요한 질문도 되묻지 않고 알아서 조회합니다.</li></ul><h5><strong>안전한 데이터 쓰기 (Human-in-the-loop)</strong></h5><ul><li>자연어로 노션 행 추가·수정까지 지원합니다. </li><li>쓰기 실행 직전 <code>기존값 → 새값</code> 미리보기를 보여주고 y/N 확인을 받아, 읽기는 자유롭게 쓰기만 승인받는 권한을 분리했습니다.</li></ul><h5><strong>주간 자동 리포트</strong></h5><ul><li>GitHub Actions cron으로 매주 일요일 21시(KST) 자동 실행합니다. </li><li>지난 7일 데이터를 Claude가 분석해 이번 주 요약·목표 진행률·개선 방법 구조의 코칭 리포트를 생성하고 Notion 리포트 DB에 자동 저장합니다.</li></ul><hr><h4>📌 아키텍처</h4>@@IMG@@<hr><h4>📌 기술적 의사결정</h4><h5><strong>스키마 단일 진실 공급원 (Single Source of Truth)</strong></h5><p>새 DB 추가 시 <code>schema.ts</code> 한 곳에 DB↔컬럼↔타입을 정의하면 조회·기록 도구가 자동 지원됩니다. </p><ul><li>읽기 → 스키마를 보고 행 파서를 자동 생성(<code>buildMap</code>)</li><li>쓰기 → 같은 스키마로 Notion payload 생성(<code>toProperty</code>)</li><li>도구 설명 → 스키마를 훑어 자동 생성(<code>buildSchemaHint</code>)</li></ul><h5><strong>비용 최적화 전략</strong></h5><ol><li>모델 라우팅<ol><li>[분석/비교/달성률/추세] 등 키워드로 상위 모델(Sonnet)과 저가 모델(Haiku)을 자동 분기. </li><li>추가 API 호출 없이 키워드만으로 판단해 라우팅 비용 0.</li></ol></li><li>Prompt caching<ol><li>매 호출 동일하게 들어가는 system + tools, 누적 대화 기록에 캐시 브레이크포인트를 걸어 두 번째 호출부터 정가의 ~10%로 처리.</li></ol></li><li>조회 캐시<ol><li>같은 읽기 도구를 같은 입력으로 다시 부르면 Notion 재호출 없이 저장된 결과 재사용. 쓰기 성공 시 캐시 무효화로 stale 데이터 방지.</li></ol></li></ol><hr><h4>📌 트러블슈팅</h4><h5><strong>1. 매 호출마다 시스템 프롬프트·도구 정의가 통째로 재전송</strong></h5><p>📝 <strong>문제:</strong> API 무상태 특성으로 매번 시스템 프롬프트 + 도구 10개 명세 + 대화 기록 전체를 다시 보내 같은 내용에 매번 정가를 지불했습니다.</p><p>🙌 <strong>해결:</strong> Prompt caching 적용. 시스템 프롬프트·도구 정의·대화 기록에 캐시 브레이크포인트를 걸어 두 번째 호출부터 정가의 ~10%로 재사용했습니다.</p><p>🫶 <strong>배운 점:</strong> 브레이크포인트는 요청당 최대 4개라는 제약을 알게 됐습니다. \n대화 기록의 마지막 블록 한 곳에만 표시를 찍어 그 앞 전체가 prefix로 재사용되게 설계했고, tools → system 전송 순서를 이용해 system 한 곳만 표시해도 tools까지 함께 캐싱되는 점을 활용했습니다.</p>"
+      "description": "Notion API와 Github Actions를 활용해 AI 에이전트 기반 개인 분석 자동화 시스템을 구축한 개인 프로젝트입니다.",
+      "detailHtml": "<p><a href=\"https://github.com/mingdy52/MyOS\" target=\"_blank\" rel=\"noopener\">github-myos</a></p><div class=\"cols\">@@IMG@@@@IMG@@</div><h5>Notion에 흩어진 삶의 기록을 자연어로 묻고 답받고, 매주 자동으로 분석 리포트를 받는 AI 에이전트입니다.</h5><hr><h4>📌 문제 정의</h4><p>Notion에 가계부·운동·식단·공부·일기·목표·지원 현황 등 10개가 넘는 DB를 운영하고 있습니다. 기록은 쌓이지만 죽은 데이터에 머물렀고, 세 가지 한계가 있었습니다</p><table><tr><td>문제</td><td>설명</td></tr><tr><td>조회의 마찰</td><td>&quot;이번 달 식비 얼마?&quot;를 알려면 여러 DB를 직접 열어 필터를 걸고 눈으로 합산해야 함</td></tr><tr><td>단편적 데이터</td><td>운동·식단·체중·일기가 따로 존재해 DB를 가로지르는 질문에 답할 수 없음</td></tr><tr><td>회고의 부재</td><td>데이터는 쌓이지만 주기적으로 돌아보는 루틴이 없어 기록이 활용되지 않음</td></tr></table><p>자연어 질문 한 줄로 여러 DB를 조회·통합·분석하고, 묻지 않아도 매주 회고 리포트를 만들어주는 개인 비서가 필요했습니다.</p><hr><h4>📌 핵심 기능</h4><h5><strong>자연어 대화형 비서 (Tool-use Agent)</strong></h5><ul><li>10개 이상의 DB를 도구(tool)로 노출, Claude가 질문에 맞는 도구를 스스로 선택·연쇄 호출해 결과를 통합·요약합니다.</li><li>&quot;이번 달/지난주&quot; 같은 표현을 오늘 기준 실제 날짜 범위로 자동 변환하고, &quot;목표 달성률&quot;처럼 여러 DB가 필요한 질문도 되묻지 않고 알아서 조회합니다.</li></ul><h5><strong>안전한 데이터 쓰기 (Human-in-the-loop)</strong></h5><ul><li>자연어로 노션 행 추가·수정까지 지원합니다. </li><li>쓰기 실행 직전 미리보기를 보여주고 y/N 확인을 받아, 읽기는 자유롭게 쓰기만 승인받는 권한을 분리했습니다.<ul><li>수정: <code>기존값 → 새값</code>으로 대조</li><li>삭제: 대상 행의 제목·날짜를 읽어와 표시해 오삭제를 방지</li></ul></li><li>삭제·수정 의도(키워드)가 감지되면 모델을 상위 모델로 올려, 저가 모델이 빈 칸을 &quot;기록 없음&quot;으로 오판하는 실수를 막습니다.</li></ul><h5><strong>주간 자동 리포트</strong></h5><ul><li>GitHub Actions cron으로 매주 월요일 오전 9시(KST) 자동 실행합니다.</li><li>지난 7일(전주 월~일) 데이터를 Claude가 분석해 이번 주 요약·목표 진행률·개선 방법 구조의 코칭 리포트를 생성하고 Notion 리포트 DB에 자동 저장합니다.</li></ul><hr><h4>📌 아키텍처</h4>@@IMG@@<hr><h4>📌 기술적 의사결정</h4><h5><strong>스키마 자동 발견</strong></h5><p>DB를 하나 추가할 때마다 데이터소스 id를 <code>.env</code>에 적고, 조회·쓰기 코드와 도구 설명을 일일이 고치는 건 비효율적입니다. 그래서 <strong>모든 DB가 들어있는 부모 페이지 하나</strong>만 알려주면, 앱이 노션을 훑어 안의 DB들(데이터소스 id·컬럼·타입)을 <strong>자동으로 발견</strong>해 캐시에 저장하고, 읽기·쓰기·도구 설명문이 모두 이 발견된 스키마를 바라봅니다.</p><ul><li><strong>캐시 우선</strong> — 평소엔 캐시만 읽어 네트워크 호출 0. 노션에서 DB·컬럼을 바꿨을 때만 <code>refresh</code>로 다시 훑습니다.</li><li>새 DB는 <strong>노션에서 만들고 </strong><strong><code>refresh</code></strong><strong> 한 번</strong>이면 끝 — 코드·설정을 한 줄도 안 고칩니다.</li><li>발견된 스키마 하나가 세 곳을 자동으로 먹입니다.<ul><li>읽기 → 스키마대로 행 파서를 자동 생성(<code>buildMap</code>)</li><li>쓰기 → 같은 스키마로 Notion payload 생성(<code>toProperty</code>)</li><li>도구 설명 → 스키마를 훑어 자동 생성(<code>buildSchemaHint</code>)</li></ul></li><li><strong>단일 조회 진입점</strong> — 모든 읽기는 <code>getRecords(db, { 기간·필터·본문 })</code> 하나로 처리해 DB마다 리더 파일을 두지 않습니다.</li></ul><h5><strong>비용 최적화 전략</strong></h5><ol><li>모델 라우팅<ol><li>[분석/비교/달성률/추세] 등 키워드로 상위 모델(Sonnet)과 저가 모델(Haiku)을 자동 분기합니다.</li><li>추가 API 호출 없이 키워드만으로 판단해 라우팅 비용 0.</li></ol></li><li>Prompt caching<ol><li>매 호출 동일하게 들어가는 system + tools, 누적 대화 기록에 캐시 브레이크포인트를 걸어 두 번째 호출부터 정가의 ~10%로 처리합니다.</li></ol></li></ol><h5>성능(응답 속도) 최적화 — 조회 캐시</h5><p>같은 읽기 도구를 같은 입력으로 다시 부르면 Notion 재호출 없이 저장된 결과를 재사용합니다(토큰이 아니라 노션 호출·대기시간을 줄이는 것). 쓰기 성공 시 캐시를 무효화해 stale 데이터를 방지합니다.</p><hr><h4>📌 트러블슈팅</h4><h5><strong>1. 매 호출마다 시스템 프롬프트·도구 정의가 통째로 재전송</strong></h5><p>📝 <strong>문제:</strong> API 무상태 특성으로 매번 시스템 프롬프트 + 도구 명세 + 대화 기록 전체를 다시 보내 같은 내용에 매번 정가를 지불했습니다.</p><p>🙌 <strong>해결:</strong> Prompt caching 적용. 시스템 프롬프트·도구 정의·대화 기록에 캐시 브레이크포인트를 걸어 두 번째 호출부터 정가의 ~10%로 재사용했습니다.</p><p>🫶 <strong>배운 점:</strong> 브레이크포인트는 요청당 최대 4개라는 제약을 알게 됐고, 이 한도 안에서 딱 2개(system 1 + 대화 기록 1)만으로 전체를 캐싱하도록 설계했습니다.</p>"
     },
     {
       "name": "✈️ Mero — 여행 다이어리 & 가계부 앱",
@@ -186,7 +186,7 @@
         "Docker",
         "Swagger"
       ],
-      "description": "Spring Boot와 Supabase를 기반으로 여행 기록 및 가계부 기능을 제공하는 앱의 백엔드를 개발했습니다.",
+      "description": "Spring Boot·JPA·Supabase를 사용해 여행 기록과 가계부 기능을 제공하는 앱의 백엔드를 팀 프로젝트로 개발했습니다.",
       "detailHtml": "<div class=\"cols\"><p><a href=\"https://github.com/mero-guyee/mero-backend\" target=\"_blank\" rel=\"noopener\"><strong>Github</strong></a><strong>  ·  </strong><a href=\"https://ming-page.notion.site/29849882e5118018a001edd89d26fc98\" target=\"_blank\" rel=\"noopener\"><strong>ERD</strong></a><strong>  ·  </strong><a href=\"https://mero-dev-development.up.railway.app/swagger-ui/index.html\" target=\"_blank\" rel=\"noopener\"><strong>API Docs</strong></a></p></div><div class=\"cols\">@@IMG@@@@IMG@@@@IMG@@</div><h5>Memory + Road — 오프라인 환경에서도 끊김 없이 기록하고, 온라인 복구 시 무결하게 동기화되는 여행 일기 앱의 REST API 서버입니다.</h5><hr><h4>📌 문제 정의</h4><p>해외·장기 여행에서 기존 앱들은 각각의 문제를 따로 해결하고 있었고, 여행이라는 하나의 맥락으로 통합된 앱이 없었습니다. 직접 겪은 불편함에서 출발해 기획했습니다.</p><table><tr><td>문제</td><td>설명</td></tr><tr><td>오프라인 환경</td><td>해외에서는 네트워크가 불안정 → 기록 시점에 서버 통신이 보장되지 않음. 동기화 시 중복 저장 위험</td></tr><tr><td>다중 통화 경비</td><td>한 여행에서 여러 나라·통화를 오가며 지출 → 통화별 집계와 환율 적용이 필요</td></tr><tr><td>기록의 결합</td><td>사진·위치·날씨·경비가 &quot;그날의 발자취&quot;라는 하나의 맥락으로 묶여야 함</td></tr><tr><td>파일 보관</td><td>여행 사진·전자항공권(PDF) 등을 안전하게 저장·접근</td></tr></table><hr><h4>📌 규모</h4><p>58개 API 엔드포인트 · 13개 엔티티 · 175개 테스트 케이스 · 핵심 비즈니스 로직 라인 커버리지 90% 이상</p><hr><h4>📌 핵심 기능</h4><h5><strong>인증 / 계정</strong></h5><ul><li>이메일 회원가입(인증 메일 완료 후 계정 생성)</li><li>비밀번호 재설정</li><li>Apple/Google 소셜 로그인(신규 유저 자동 가입)</li><li>JWT Access + Refresh Token</li><li>로그아웃 시 Refresh Token 무효화</li></ul><h5><strong>여행(Trip)</strong></h5><ul><li>여행 CRUD</li><li>대표 이미지·첨부 문서(PDF) 관리</li><li>여행 메모</li></ul><h5><strong>발자취(Footprint)</strong></h5><ul><li>제목·내용·날짜·날씨·다중 GPS 위치·다중 사진(정렬 순서 보존) 기록</li></ul><h5><strong>경비 / 예산</strong></h5><ul><li>42개 통화 지원</li><li>BigDecimal 기반 금액 처리</li><li>기본 + 사용자 정의 카테고리</li><li>통화별 예산 설정(동일 통화 1개 제한)·환율 적용</li><li>경비-발자취 연결</li></ul><hr><h4>📌 아키텍처</h4>@@IMG@@<hr><h4>📌 기술적 의사결정</h4><h5><strong>오프라인 동기화 — 멱등성 설계</strong></h5><p>클라이언트가 오프라인 상태에서 데이터를 생성할 때 <code>clientId(UUID)</code>를 직접 부여하고, DB에 unique 제약을 걸었습니다. </p><p>서버는 동일 <code>clientId</code> 요청이 재시도로 들어와도 새로 생성하지 않고 기존 엔티티를 반환합니다. Footprint·Expense·Photo·Budget·Category 전반에 적용해 네트워크 불안정 환경에서도 중복 없는 동기화를 보장합니다.</p><h5><strong>소셜 토큰 검증 — 외부 라이브러리 없이 직접 구현</strong></h5><p>Google 로그인에서 별도 라이브러리 없이 Google JWK 공개키를 직접 받아 RSA 서명을 검증하고 클레임을 파싱했습니다.</p><hr><h4>📌 트러블슈팅</h4><h5><strong>1. AWS S3 → Supabase Storage 전환과 스토리지 추상화</strong></h5><p>📝 <strong>상황:</strong> 운영 비용·인프라 단순화를 위해 AWS S3에서 Supabase Storage로 전환이 필요했습니다.</p><p>🤔 <strong>고민:</strong> 구현체를 그냥 교체하면 도메인 코드(FootprintService 등)도 함께 수정해야 하는 구조가 반복됩니다.</p><p>🙌 <strong>해결:</strong> <code>StorageService</code> 인터페이스를 정의해 도메인은 인터페이스에만 의존하게 했습니다. Supabase가 S3 호환 엔드포인트를 제공해서, <code>endpointOverride</code>와 <code>pathStyleAccessEnabled(true)</code> 설정만으로 기존 AWS SDK를 그대로 재사용할 수 있었습니다. 업로드 결과는 <code>StorageUploadResult</code> DTO로 캡슐화해 저장소 응답 형태와의 결합도 제거했습니다.</p><p>🫶 <strong>결과:</strong> 저장소 교체가 구현체 1개 + yml 설정 변경으로 마무리됐습니다.</p><hr><h5><strong>2. 공개 URL → Presigned URL 전환</strong></h5><p>📝 <strong>상황:</strong> 초기에는 이미지를 공개 버킷에 올리고 URL을 DB에 저장해 그대로 내려주는 방식이었습니다.</p><p>🤔 <strong>문제:</strong> 공개 버킷은 URL만 알면 누구나 영구 접근이 가능하고, URL을 DB에 저장하면 버킷·도메인이 바뀔 때 저장된 URL이 전부 깨지는 구조적 결합도 있었습니다.</p><p>🙌 <strong>해결:</strong> 버킷을 private으로 전환하고, 조회 시점에 <code>S3Presigner</code>로 서명된 URL을 동적 발급했습니다. DB에는 완성된 URL 대신 <code>s3_key</code>(객체 키)만 저장하고, URL은 응답 생성 시 만들어지는 휘발성 값으로 성격을 바꿨습니다. 만료 시간은 설정값으로 분리해 환경별 조정이 가능하게 했습니다.</p><p>🫶 <strong>결과:</strong> 시간 제한 서명 URL로만 이미지 접근이 가능해졌고, 도메인이 저장소 URL 형식에 의존하지 않는 구조가 됐습니다.</p><hr><h5><strong>3. Lombok @Builder 파라미터가 필드 초기화를 덮어쓴 NPE</strong></h5><p>📝 <strong>상황:</strong> Footprint 생성 API 호출 시 응답 변환 과정에서 간헐적으로 NPE가 발생했습니다. <code>photos</code> 컬렉션이 null이었는데, 필드 선언부에 <code>new ArrayList&lt;&gt;()</code>로 초기화해뒀기 때문에 원인이 바로 보이지 않았습니다.</p><p>🤔 <strong>원인:</strong> <code>@Builder</code> 생성자에 <code>photoUrls</code> 파라미터가 있었고, <code>this.photos = photoUrls</code>로 필드 초기화를 덮어쓰고 있었습니다. 생성 시 이 파라미터를 넘기지 않으면 null이 되어 빈 리스트가 교체됐습니다.</p><p>🙌 <strong>해결:</strong> 해당 파라미터는 실제 사용처가 없는 죽은 코드였습니다. 파라미터를 제거해 초기화 책임을 필드 선언부 한 곳으로 일원화했습니다.</p><p>🫶 <strong>배운 점:</strong> <code>@Builder</code>는 생성자 파라미터가 필드 초기화를 조용히 덮어쓸 수 있습니다. 기본값을 보장해야 하는 컬렉션 필드는 빌더에 노출하지 않는 것을 원칙으로 삼게 됐습니다.</p>"
     },
     {
@@ -203,7 +203,7 @@
         "Oauth",
         "JWT"
       ],
-      "description": "NestJS와 Supabase로 구축한 학습 관리 서비스로, 디스코드 서버와 연동한 공부 기록 앱입니다.",
+      "description": "NestJS·Supabase 기반으로 디스코드 서버 연동 기능을 포함한 학습 관리 서비스의 백엔드를 팀 프로젝트로 개발했습니다.",
       "detailHtml": "<h5>디스코드 스터디 서버 <strong>마법사관학교</strong>와 연동되는 모바일 학습관리 앱입니다. \n기존 디스코드 봇이 쌓던 공부 시간·출석 데이터를 앱에서도 이어서 관리할 수 있도록 투두·뽀모도로·일기·캘린더·푸시 알림 기능을 REST API로 제공합니다.</h5><hr><h4>📌 기여</h4><ul><li>반복 투두 기능 기획 및 아이디어 제안 — &quot;매일 영어 30분&quot;처럼 패턴 기반 반복 작업을 등록·추적하는 기능</li><li>NestJS 기반 백엔드 API 설계 검토 및 ERD 리뷰 주도</li><li>팀 Git 워크플로우 정립 및 코드 리뷰 문화 정착</li></ul><hr><h4>📌 담당 모듈</h4><h5><strong>투두 리스트</strong></h5><ul><li>날짜별 CRUD·완료 토글 전체 구현. \n<code>sort_order → created_at</code> 2차 정렬로 안정적 순서를 보장하고, 드래그 앤 드롭 순서 변경은 <code>Promise.all</code> 병렬 업데이트로 처리했습니다. 모든 쿼리에 <code>user_id + guild_id</code> 조건을 걸어 타인 데이터 접근을 차단했습니다.</li></ul><h5><strong>반복 투두</strong></h5><ul><li>매일 자동 생성되는 반복 투두 템플릿 CRUD 구현. \n등록 시 다음날 배치를 기다리지 않고 오늘 날짜 투두에 즉시 반영했습니다. 글로벌 사용자를 고려해 사용자 타임존을 조회해 현지 기준 오늘을 계산하고, 배치와 즉시 생성 간 중복 INSERT를 방지하는 체크 로직도 함께 처리했습니다.</li></ul><h5><strong>뽀모도로 설정</strong></h5><ul><li>집중·휴식 시간, 반복 횟수 조회·저장 구현. \n<code>upsert(onConflict)</code> 패턴으로 최초 생성과 수정을 단일 쿼리로 처리하고, 설정이 없는 사용자에게는 기본값(25/5/4) 폴백을 반환했습니다.</li></ul><h5><strong>알림</strong></h5><ul><li>목록 조회(페이지네이션)·단건 읽음·전체 읽음·안읽은 개수 구현. \n안읽은 개수는 <code>head: true</code>로 데이터 본문 없이 카운트만 조회해 불필요한 전송을 제거했습니다. 이미 읽은 알림은 재업데이트 없이 조기 반환하는 멱등 처리도 적용했습니다.</li></ul><hr><h4>📌 트러블슈팅</h4><h5><strong>1. 반복 투두가 오늘은 안 보이는 문제 + 타임존</strong></h5><p>📝 <strong>문제:</strong> 반복 투두는 매일 00:00 배치로 다음날 투두를 생성하는 구조라, 사용자가 오늘 등록하면 당일엔 투두에 나타나지 않아 등록이 무시된 것처럼 보였습니다.</p><p>🙌 <strong>해결:</strong> 반복 투두 등록 시 오늘 날짜 todos에도 즉시 INSERT. 단, 서버 시간 기준으로 오늘을 잡으면 해외 사용자에게 날짜가 어긋나 사용자별 timezone을 조회해 현지 기준 오늘을 계산했습니다. 배치와 즉시 생성이 겹쳐 중복 INSERT가 날 수 있어 <code>(user_id, date, recurring_id)</code> 존재 여부를 먼저 확인하고 삽입했습니다.</p><hr><h5><strong>2. 투두 순서 변경 시 부분 실패 처리</strong></h5><p>🤔 <strong>고민:</strong> 드래그 정렬은 여러 행의 <code>sort_order</code>를 한 번에 바꿔야 하는데, Supabase 단일 트랜잭션으로 묶기 어려웠습니다.</p><p>🙌 <strong>해결:</strong> <code>Promise.all</code>로 병렬 처리해 응답 지연을 줄이고, 일부 실패하더라도 전체를 막지 않고 성공 건수(<code>updatedCount</code>)를 집계해 반환하고 실패 건은 로깅했습니다. 정렬은 멱등성이 있어 클라이언트 재시도로 복구 가능하다고 판단했습니다.</p><hr><h5><strong>3. 뽀모도로 설정이 없는 사용자 대응</strong></h5><p>🤔 <strong>고민:</strong> 설정을 한 번도 저장하지 않은 사용자는 조회 시 row가 없어 에러(<code>PGRST116</code>)가 발생했습니다.</p><p>🙌 <strong>해결:</strong> 해당 에러 코드를 &quot;데이터 없음&quot;으로 구분해 기본값(25/5/4) 폴백을 반환했습니다. 저장은 <code>upsert(onConflict: user_id, guild_id)</code>로 최초 생성과 수정을 단일 쿼리로 통일해 분기 로직을 제거했습니다.</p>"
     },
     {
@@ -223,7 +223,7 @@
         "Mybatis",
         "SVN"
       ],
-      "description": "Java/Spring과 Tibero를 사용해 한국과학창의재단의 인재관리 시스템을 풀스택으로 개발했습니다.",
+      "description": "Java·Spring·Tibero 스택으로 한국과학창의재단 인재관리 시스템을 풀스택으로 개발한 실무 프로젝트입니다.",
       "detailHtml": "<ul><li>6인 팀</li><li>2인 서브팀 내에서 세션 기반 인증 설계<ul><li>권한 분리(역할별 접근 제어), 로그인 실패 잠금 정책, 비밀번호 단방향 암호화 적용.</li></ul></li><li>직원 경력 관리 모듈의 프론트엔드·백엔드를 전담하여 풀스택으로 개발</li><li>기능 개발, API 개발, SQL 작성, 레거시 코드 분석, 버그 수정, 요구사항 반영</li></ul><h4>성과</h4><ul><li>프로젝트 중반 이후 반복적인 요구사항 변경 발생 시, 변경 범위를 문서화하고 PM과 우선순위를 조율하여 일정 관리</li><li>탭 구성/순서가 반복적으로 변경되는 요구사항에 대해 구조적 개선을 적용하여 변경 대응 시간을 단축<ul><li>화면(JSP): 화면마다 중복 하드코딩되어 있던 탭 버튼을 JS 공통 함수로 모듈화하여 한 곳 수정으로 전체 화면 일괄 반영되도록 개선</li><li>데이터: DB 설계상 별도 테이블 없이 관리되던 탭 메타 정보(이름/순서)를 enum으로 구조화하여 코드 레벨에서 일관성 확보 및 변경 비용 최소화</li></ul></li></ul>"
     },
     {
@@ -241,7 +241,7 @@
         "SVN",
         "Nexacro"
       ],
-      "description": "Java/Spring과 Nexacro를 활용해 에너지기술평가원의 데이터 이관 및 연계 시스템을 풀스택으로 개발했습니다.",
+      "description": "Java·Spring·Nexacro를 활용해 에너지기술평가원의 데이터 이관 및 연계 시스템을 풀스택으로 개발한 실무 프로젝트입니다.",
       "detailHtml": "<ul><li>4인 팀</li><li>에너지기술평가원(에기평) 데이터를 IRIS 시스템으로 이관하는 중간 연계 시스템. <ul><li>두 시스템의 데이터 포맷 차이를 매핑하여 변환. </li><li>데이터 조회, 변환, 삽입 로직 및 모니터링 화면 개발.</li></ul></li><li>Nexacro 프레임워크를 신규 습득하여 실무에 적용</li></ul><h4>성과</h4><ul><li>팀원 전체가 Nexacro를 처음 다루는 상황에서, 유효성 검사·화면 전환 등 여러 화면에 반복적으로 동일한 로직이 중복 작성되는 것을 확인<ul><li>Nexacro의 import 기능을 활용해 공통 로직을 모듈로 분리하여 배포, 팀 전체가 활용하도록 하여 중복 코드 제거 및 유지보수성 개선</li></ul></li></ul>"
     },
     {
@@ -261,7 +261,7 @@
         "SVN",
         "MySQL"
       ],
-      "description": "Java/Spring과 MySQL 기반의 한국전파진흥협회 평가 시스템 유지보수를 담당했습니다.",
+      "description": "Java·Spring·MySQL 스택으로 한국전파진흥협회 평가 시스템을 유지보수한 실무 프로젝트입니다.",
       "detailHtml": "<ul><li>리포팅 보고서 양식 수정 및 신규 문서 추가</li><li>안정화 기간 동안 버그 수정, 성능 최적화, 리포팅 문서 기능 추가. 기존 코드 분석 및 요구사항 반영.</li></ul>"
     },
     {
@@ -281,7 +281,7 @@
         "SVN",
         "MySQL"
       ],
-      "description": "Java/Spring과 MySQL을 활용해 경기도교육청 공법선정 시스템을 풀스택으로 개발했습니다.",
+      "description": "Java·Spring·MySQL 스택으로 경기도교육청 공법선정 시스템을 풀스택으로 개발한 실무 프로젝트입니다.",
       "detailHtml": "<ul><li>3인 팀</li><li>공법 선정 전 평가 등록·처리 기능을 설계 및 구현</li><li>입사 후 첫 실무 프로젝트로, 리포팅 툴을 신규 학습하여 보고서 양식 개발</li></ul>"
     }
   ]
