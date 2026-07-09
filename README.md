@@ -30,6 +30,8 @@ Claude가 **어떤 노션 DB를 어떤 기간으로 조회할지 스스로 판�
 | 단순 조회 | **Haiku** — 싸고 빠름 |
 | 분석·추론 | **Sonnet** — 상위 모델 |
 
+> **한계** — 키워드 매칭이라 힌트 단어가 없는 복합 질문은 Haiku로 갑니다. LLM으로 판정하면 정확하지만 그 비용이 절감액을 갉아먹어, 비용 0인 규칙 방식을 택했습니다. 규칙은 [`model-router.ts`](src/model-router.ts)에 있고 [테스트](src/model-router.test.ts)로 지킵니다.
+
 여기에 **prompt caching**을 더했습니다.
 시스템 프롬프트·도구 정의·대화 기록은 매 호출마다 똑같이 들어가므로, 캐시 브레이크포인트를 걸어 **두 번째 호출부터는 정가의 ~10%로 재사용**합니다.
 매 응답마다 토큰 사용량(입력 / 출력 / 캐시 읽기 / 캐시 쓰기)을 출력해, 캐싱이 실제로 먹히는지 눈으로 확인하며 만들었습니다.
@@ -54,27 +56,46 @@ DB를 하나 추가할 때마다 데이터소스 id를 `.env`에 적고, 조회�
 
 ## 기술 스택
 
-Node.js (ESM) · TypeScript (strict) · [`@anthropic-ai/sdk`](https://www.npmjs.com/package/@anthropic-ai/sdk) (Claude tool use) · [`@notionhq/client`](https://www.npmjs.com/package/@notionhq/client) · GitHub Actions
+Node.js (ESM) · TypeScript (strict) · [`@anthropic-ai/sdk`](https://www.npmjs.com/package/@anthropic-ai/sdk) (Claude tool use) · [`@notionhq/client`](https://www.npmjs.com/package/@notionhq/client) · GitHub Actions · [`node:test`](https://nodejs.org/api/test.html)
+
+> strict로 켜 두었지만, 노션 SDK 응답은 경계에서 `any`로 받아 `props.ts`에서 우리 타입으로 파싱합니다. 내부 로직은 그 뒤의 좁혀진 타입 위에서 돕니다.
+
+## 테스트
+
+부작용 없는 순수 로직을 별도 모듈로 분리해 [`node:test`](https://nodejs.org/api/test.html)로 검증합니다 — 추가 의존성·키 없이 돕니다.
+
+- [`model-router.ts`](src/model-router.ts) — 모델 라우팅 규칙
+- [`notion/filters.ts`](src/notion/filters.ts) — 노션 필터 조각 생성
+
+```bash
+npm test   # *.test.ts (15개)
+```
+
+> 노션 실연동은 키가 필요해 수동으로 검증합니다. push·PR마다 CI가 `tsc --noEmit`와 `npm test`를 돌립니다.
 
 ## 구조
 
 ```text
 src/
-├── index.ts            # 대화형(REPL) 에이전트 — 도구 루프 + 모델 라우팅 + 캐싱
-├── report.ts           # 주간 리포트 배치 (스케줄러용)
-├── portfolio-draft.ts  # 포트폴리오 초안 생성 (노션 → 검수용 JSON, 수동 실행)
-├── site.ts             # 검수된 JSON → 정적 HTML 빌드 (GitHub Pages 배포)
-├── content/            # 검수·확정된 포트폴리오 콘텐츠 (JSON)
+├── index.ts             # 대화형(REPL) 에이전트 — 도구 루프 + 모델 라우팅 + 캐싱
+├── model-router.ts      # 질문 → 모델(Haiku/Sonnet) 라우팅 규칙 (순수·테스트 대상)
+├── model-router.test.ts # ↑ 라우팅 규칙 단위 테스트
+├── report.ts            # 주간 리포트 배치 (스케줄러용)
+├── portfolio-draft.ts   # 포트폴리오 초안 생성 (노션 → 검수용 JSON, 수동 실행)
+├── site.ts              # 검수된 JSON → 정적 HTML 빌드 (GitHub Pages 배포)
+├── content/             # 검수·확정된 포트폴리오 콘텐츠 (JSON)
 └── notion/
-    ├── discover.ts     # 부모 페이지 → 안의 DB들(데이터소스·컬럼) 자동 발견
-    ├── schema-sync.ts  # 발견 결과를 스키마에 반영 (캐시 우선, refresh로 갱신)
-    ├── schema-cache.ts # 발견 결과 캐시 (.cache/notion-schema.json)
-    ├── schema.ts       # DB 스키마(역할·제목·컬럼) — 발견 실패 시 fallback seed
-    ├── query.ts        # 공통 조회 — getRecords 단일 진입점 (기간·필터·본문)
-    ├── props.ts        # 속성 파싱
-    ├── mutate.ts       # 추가·수정·삭제
-    ├── blocks.ts       # 페이지 본문(블록) 텍스트 읽기
-    └── render.ts       # 노션 페이지 본문 → HTML 변환
+    ├── discover.ts      # 부모 페이지 → 안의 DB들(데이터소스·컬럼) 자동 발견
+    ├── schema-sync.ts   # 발견 결과를 스키마에 반영 (캐시 우선, refresh로 갱신)
+    ├── schema-cache.ts  # 발견 결과 캐시 (.cache/notion-schema.json)
+    ├── schema.ts        # DB 스키마(역할·제목·컬럼) — 발견 실패 시 fallback seed
+    ├── query.ts         # 공통 조회 — getRecords 단일 진입점 (기간·필터·본문)
+    ├── filters.ts       # 노션 필터 조각 생성 (순수·테스트 대상)
+    ├── filters.test.ts  # ↑ 필터 생성 단위 테스트
+    ├── props.ts         # 속성 파싱
+    ├── mutate.ts        # 추가·수정·삭제
+    ├── blocks.ts        # 페이지 본문(블록) 텍스트 읽기
+    └── render.ts        # 노션 페이지 본문 → HTML 변환
 ```
 
 ## 실행
