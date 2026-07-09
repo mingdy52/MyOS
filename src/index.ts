@@ -12,6 +12,8 @@ import {
   getCurrentValues,
   getRecordSummary,
 } from "./notion/mutate.js";
+// 모델 라우팅 규칙은 순수 모듈로 분리했다(단위 테스트 대상). model-router.test.ts 참고.
+import { pickModel, MODEL_COMPLEX } from "./model-router.js";
 
 // Anthropic 클라이언트.
 const anthropic = new Anthropic();
@@ -402,35 +404,6 @@ function buildSystem(): Anthropic.TextBlockParam[] {
 // 대화 기록. API는 상태가 없어서 매번 전체 기록을 보낸다.
 // 함수 밖(모듈 수준)에 두면 질문 사이에도 유지돼서 "후속 질문"이 가능하다.
 const messages: Anthropic.MessageParam[] = [];
-
-// ── 모델 라우팅(비용 절감) ──────────────────────────────────────
-// 단순 조회는 싸고 빠른 하이쿠로, 분석·추론이 필요한 질문만 상위 모델(소넷)로 올린다.
-// 토큰 단가가 몇 배 차이 나므로, 쉬운 질문을 하이쿠로 처리하는 것만으로 비용이 크게 준다.
-const MODEL_SIMPLE = "claude-haiku-4-5-20251001"; // 간단 조회용 (쌈)
-const MODEL_COMPLEX = "claude-sonnet-4-6"; // 복잡 분석용 (상위 모델)
-
-// 이 단어가 질문에 들어 있으면 "단순 조회를 넘어 분석/추론이 필요하다"고 보고 상위 모델로 올린다.
-// 새 단어가 필요하면 여기만 늘리면 된다.
-const COMPLEX_HINTS = [
-  "분석", "비교", "달성률", "추세", "추이", "패턴", "상관관계", "상관",
-  "왜", "이유", "원인", "평가", "추천", "예측", "전망", "인사이트", "개선",
-  "가치관", "성향", "후회", "교훈",
-];
-
-// 데이터를 바꾸는(수정/삭제) 의도가 보이면 상위 모델로 올린다.
-// 어떤 행을 고치고 지울지 정확히 가려내는 판단이 필요하고, 되돌리기 번거로운 작업이라
-// 약한 모델이 빈 칸을 "기록 없음"으로 오판하는 식의 실수를 막는다. (조회/추가는 그대로 Haiku)
-const WRITE_HINTS = [
-  "삭제", "지워", "지울", "제거", "없애", "수정", "고쳐", "바꿔", "변경",
-];
-
-// 질문을 보고 어떤 모델로 처리할지 고른다. (추가 API 호출 없이 키워드만으로 판단 → 비용 0)
-function pickModel(question: string): string {
-  const needsComplex =
-    COMPLEX_HINTS.some((w) => question.includes(w)) ||
-    WRITE_HINTS.some((w) => question.includes(w));
-  return needsComplex ? MODEL_COMPLEX : MODEL_SIMPLE;
-}
 
 // ── 토큰 사용량 모니터링 ──────────────────────────────────────
 // 응답마다 usage가 온다. 그걸 더해서 이번 질문/세션 누적 사용량을 보여준다.

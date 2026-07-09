@@ -1,8 +1,9 @@
 import { notion } from "./client.js";
 import { schemas } from "./schema.js";
-import type { FieldType } from "./schema.js";
 import { readProperty } from "./props.js";
 import { getPageText } from "./blocks.js";
+// 필터 조각 생성기는 부작용 없는 순수 모듈로 분리했다(단위 테스트 대상). filters.test.ts 참고.
+import { dateRange, containsFilter } from "./filters.js";
 
 // 스키마(컬럼 → 타입)만 보고, 한 행(props)을 읽어 객체로 만드는 map 함수를 자동으로 만든다.
 // 리더가 getTitle/getNumber... 를 나열할 필요가 없어진다. (queryDataSource가 database를 받으면 내부에서 호출)
@@ -54,31 +55,6 @@ export async function queryDataSource(options: {
     id: page.id,
     ...map(page.properties),
   }));
-}
-
-// 날짜 범위 조건들을 배열로 만들어 돌려준다.
-// 컬럼명(property)은 DB마다 다를 수 있어 인자로 받는다.
-// from만/to만/둘 다/둘 다 없음 모두 처리. (없으면 빈 배열)
-export function dateRange(property: string, from?: string, to?: string) {
-  const conds = [];
-  if (from) conds.push({ property, date: { on_or_after: from } });
-  if (to) conds.push({ property, date: { on_or_before: to } });
-  return conds;
-}
-
-// 컬럼 타입에 맞는 '부분검색(contains)' 필터를 만든다.
-// 운동 이름(title 안에 글자 포함)·지출 유형(multi_select 포함) 같은 걸 거를 때 쓴다.
-function containsFilter(type: FieldType | undefined, column: string, value: string) {
-  switch (type) {
-    case "multi_select":
-      return { property: column, multi_select: { contains: value } };
-    case "title":
-      return { property: column, title: { contains: value } };
-    case "select":
-      return { property: column, select: { equals: value } };
-    default: // text 등
-      return { property: column, rich_text: { contains: value } };
-  }
 }
 
 // 모든 조회의 단일 진입점. (예전엔 DB마다 리더 파일이 하나씩 있었지만, 이제 이 함수 하나로 통일.)
