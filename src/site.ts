@@ -42,9 +42,8 @@ const PROFILE = {
   avatar: "profile.jpg", // assets/profile.jpg 에 넣으면 표시. 없으면 점선 placeholder.
   // 자기소개(문단별). 본인이 직접 쓴 글이라 여기서 관리한다. (비우면 Claude가 만든 summary를 쓴다)
   intro: [
-    "저는 여행을 좋아합니다.",
-    "새로운 장소를 방문하는 것보다, 낯선 환경을 이해하고 그 안에서 길을 찾아가는 과정을 좋아하기 때문입니다.",
-    "남미 2개월 여행을 준비하면서도 여러 국가를 이동하는 복잡한 동선과 네트워크가 불안정한 환경이라는 문제를 마주했습니다. 그리고 그 경험은 오프라인에서도 사용할 수 있는 여행 기록 앱을 직접 개발하는 계기가 되었습니다. 저는 새로운 환경을 만나면 먼저 관찰하고, 문제를 발견하면 원인을 이해하려고 합니다. 그리고 가능하다면 직접 해결해 보고 싶어 합니다.",
+    "저는 여행을 좋아합니다. 정확히는, 새로운 장소를 방문하는 것 자체보다 낯선 환경을 이해하고 그 안에서 길을 찾아가는 과정을 좋아합니다.",
+    "남미 2개월 여행을 준비하면서도 여러 국가를 이동하는 복잡한 동선과 네트워크가 불안정한 환경이라는 문제를 마주했습니다. 그리고 그 경험은 오프라인에서도 사용할 수 있는 여행 기록 앱을 직접 개발하는 계기가 되었습니다. 저는 새로운 환경을 만나면 먼저 관찰하고, 문제를 발견하면 원인을 이해하려고 합니다. 그리고 가능하다면 직접 해결해 보려 합니다.",
     "개발 역시 저에게는 같은 과정입니다. 기술을 사용하는 것보다 문제를 탐구하는 일에 더 큰 흥미를 느끼며, 실제 경험에서 얻은 질문을 서비스로 만들어 가는 개발자입니다.",
   ],
 };
@@ -132,19 +131,16 @@ function renderCard(p: Content["projects"][number], idx: number): string {
       </article>`;
 }
 
-// 맨 앞에 고정할 프로젝트(그룹 내에서 이 순서대로 먼저 온다). 나머지는 기존(최신순) 유지.
-const FEATURED = ["Mero"];
+// period("2025-11-01" 또는 "2025-08-01 ~ 2026-02-28")에서 시작일을 뽑아 정렬 키로 쓴다.
+// 날짜가 없으면 빈 문자열 → 맨 뒤로.
+const startDate = (period?: string) => String(period ?? "").split("~")[0].trim();
 
 // ── 프로젝트 섹션: 개인 / 회사로 나눠 각각 2열 그리드 ──────────
 function renderProjects(projects: Content["projects"]): string {
-  // FEATURED에 있는 건 그 순서로 앞에, 나머지는 원래 순서대로. (이름에 키가 포함되면 매칭 → 제목 바꿔도 안 깨짐)
-  const rank = (name: string) => {
-    const i = FEATURED.findIndex((f) => name.includes(f));
-    return i === -1 ? FEATURED.length : i;
-  };
   // 원래 인덱스(i)는 모달의 PROJECTS 배열과 매칭되므로 그대로 둔 채, 표시 순서만 바꾼다.
   const indexed = projects.map((p, i) => ({ p, i }));
-  const ordered = [...indexed].sort((a, b) => rank(a.p.name) - rank(b.p.name)); // 안정 정렬
+  // 시작일 기준 최신순(내림차순). 날짜 없는 건 뒤로.
+  const ordered = [...indexed].sort((a, b) => startDate(b.p.period).localeCompare(startDate(a.p.period)));
   // 회사(구분=회사)만 회사 섹션, 나머지(개인·팀)는 개인 섹션.
   const company = ordered.filter(({ p }) => String(p.type ?? "").includes("회사"));
   const personal = ordered.filter(({ p }) => !String(p.type ?? "").includes("회사"));
