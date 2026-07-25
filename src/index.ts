@@ -10,6 +10,8 @@ import {
   getSessionSummary,
   todayKST,
 } from "./agent.js";
+// "/diet" 전용 파이프라인(사진 분석 → 음식 칸 채우기 / 빈 페이지 삭제)은 diet.ts에 있다.
+import { runDiet } from "./diet.js";
 
 // ── 대화형(REPL) 루프 ────────────────────────────────────────
 // 한 번 켜두고 질문을 계속 받는다. "exit"/"quit"/빈 줄이면 종료.
@@ -48,6 +50,8 @@ function printHelp(): void {
   console.log("   /decide              오늘 일기를 분석해 의사결정 로그 작성");
   console.log("   /decide <날짜>       그 날짜(YYYY-MM-DD) 일기로 작성");
   console.log("   /decide <부터> <까지> 그 기간 일기를 몰아서 작성");
+  console.log("   /diet         음식 칸이 빈 식단 페이지의 사진을 분석해 음식 입력");
+  console.log("                 (사진 없는 빈 페이지는 삭제, 둘 다 y/N 확인)");
   console.log("   token         이번 세션 누적 토큰 사용량 보기");
   console.log("   refresh       노션에서 DB 스키마 다시 발견(새 DB·컬럼 반영)");
   console.log("   clear         대화 기록·조회 캐시 비우기");
@@ -106,6 +110,15 @@ while (true) {
       `같은 날 같은 결정(제목)이 이미 있으면 그건 건너뛰어.`;
     console.log();
     await ask(prompt, confirmWrite);
+    console.log();
+    continue;
+  }
+
+  // "/diet" → 식단 DB에서 음식 칸이 빈 페이지를 훑는다.
+  // 페이지 안 사진이 있으면 분석해 '음식'을 채우고, 없으면 껍데기로 보고 삭제한다(둘 다 y/N 확인).
+  if (question === "/diet") {
+    console.log();
+    await runDiet(confirmWrite);
     console.log();
     continue;
   }

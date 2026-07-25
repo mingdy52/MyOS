@@ -27,3 +27,30 @@ export async function getPageText(pageId: string): Promise<string> {
 
   return lines.join("\n");
 }
+
+// 페이지 본문에 붙은 '이미지 블록'들의 URL만 뽑는다. (getPageText가 텍스트를 읽는 것과 짝)
+// 노션 이미지는 두 종류다:
+//   - file    : 노션이 호스팅. url은 1시간쯤 뒤 만료되는 임시 주소 → 쓰기 직전에 읽어야 안전.
+//   - external: 외부 링크. 만료 없음.
+// 식단 사진처럼 "페이지 안에 넣어둔 사진"을 분석에 넘길 때 쓴다.
+export async function getPageImages(pageId: string): Promise<string[]> {
+  const urls: string[] = [];
+  let cursor: string | undefined = undefined;
+
+  do {
+    const res: any = await notion.blocks.children.list({
+      block_id: pageId,
+      page_size: 100,
+      ...(cursor && { start_cursor: cursor }),
+    });
+    for (const b of res.results) {
+      if (b.type !== "image") continue;
+      const img = b.image;
+      const url = img?.type === "external" ? img.external?.url : img?.file?.url;
+      if (url) urls.push(url);
+    }
+    cursor = res.has_more ? res.next_cursor : undefined;
+  } while (cursor);
+
+  return urls;
+}
