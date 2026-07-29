@@ -9,7 +9,7 @@ import { getRecords } from "./notion/query.js";
 import { getPageImages } from "./notion/blocks.js";
 import { updateRecord, deleteRecord } from "./notion/mutate.js";
 import { MODEL_COMPLEX } from "./model-router.js";
-import type { ConfirmWrite } from "./agent.js";
+import type { ConfirmWrite } from "./agent/types.js";
 
 const execFileP = promisify(execFile);
 

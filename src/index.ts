@@ -2,14 +2,12 @@ import "dotenv/config";
 import { createInterface } from "node:readline/promises";
 import { schemas } from "./notion/schema.js";
 import { syncSchemas } from "./notion/schema-sync.js";
-// 에이전트(도구 루프·모델 라우팅·캐싱)는 agent.ts로 분리했다.
+// 에이전트는 agent/ 아래로 분리했다.
+//   agent/core.ts     — 도구 루프 엔진(도메인 무관)
+//   agent/personal.ts — 사용자와 대화하는 에이전트. ask()가 여기 있다.
 // 이 파일은 대화형(REPL) 껍데기 — 입력을 받아 명령을 가르고, 질문은 ask()에 넘긴다.
-import {
-  ask,
-  resetConversation,
-  getSessionSummary,
-  todayKST,
-} from "./agent.js";
+import { ask, resetConversation } from "./agent/personal.js";
+import { getSessionSummary, todayKST } from "./agent/core.js";
 // "/diet" 전용 파이프라인(사진 분석 → 음식 칸 채우기 / 빈 페이지 삭제)은 diet.ts에 있다.
 import { runDiet } from "./diet.js";
 

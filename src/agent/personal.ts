@@ -1,0 +1,111 @@
+import type Anthropic from "@anthropic-ai/sdk";
+import {
+  runToolLoop,
+  clearQueryCache,
+  fmtTokens,
+  newTokens,
+  todayKST,
+} from "./core.js";
+import { notionTools } from "../tools/notion.js";
+// 모델 라우팅 규칙은 순수 모듈로 분리했다(단위 테스트 대상). model-router.test.ts 참고.
+import { pickModel, MODEL_COMPLEX } from "../model-router.js";
+import type { AgentContext, ConfirmWrite, ToolRegistry } from "./types.js";
+
+// ── Personal Agent ────────────────────────────────────────────
+// 사용자와 직접 대화하는 에이전트. 노션 도구를 들고 질문에 답한다.
+//
+// 터미널(stdin) 의존은 여기 두지 않는다: 쓰기 확인(y/N)은 confirmWrite 콜백으로 주입받아
+// REPL이든 배치든 원하는 방식으로 확인을 처리할 수 있게 한다(=stdin과 분리).
+
+// 이 에이전트가 쥔 도구 전부.
+const registry: ToolRegistry = { ...notionTools };
+
+const system =
+  "너는 사용자의 노션 가계부/운동/식단/일기, 그리고 의사결정 로그 데이터를 분석하는 비서야. " +
+  "의사결정 로그(get_decisions)에는 어떤 결정을 왜 했는지·대안·교훈·만족도가 쌓인다. " +
+  "사용자가 가치관·판단 성향·후회 패턴을 물으면, 여러 결정을 가로질러 보고 " +
+  "반복되는 기준(무엇을 중시하고 무엇을 포기하는지)과 만족도와의 관계를 짚어줘. " +
+  '"이번달", "지난주" 같은 표현은 오늘을 기준으로 ' +
+  "실제 날짜 범위(YYYY-MM-DD)로 바꿔서 도구를 호출해. " +
+  "답에 필요한 데이터가 있으면 사용자에게 물어보지 말고, 관련 도구를 알아서 모두 호출해서 먼저 확인해. " +
+  "조회(읽기)는 허락 없이 마음껏 해도 된다. " +
+  '예를 들어 "목표 달성률"을 물으면 목표를 가져온 뒤, 그 목표와 관련된 ' +
+  "운동·공부·체중·식단 등 기록도 스스로 조회해서 비교한다. " +
+  '"~을 확인해 볼까요?" 같은 되묻기로 끝내지 말고, 직접 확인한 결과로 답해. ' +
+  "데이터를 조회한 뒤에는 사람이 읽기 좋게 요약해서 한국어로 답해. " +
+  // 쓰기 안내
+  "데이터를 추가/수정/삭제할 때는 create_record / update_record / delete_record 도구를 쓴다. " +
+  "수정(update_record)이나 삭제(delete_record)를 하려면 먼저 get_* 로 읽어서 그 행의 id를 알아낸 뒤 id로 호출해라. " +
+  "삭제는 노션 휴지통으로 보내는 것이라 되돌릴 수 있지만, 그래도 어떤 행을 지울지 id를 정확히 확인하고 호출해라. " +
+  "행을 가릴 때는 제목 컬럼(예: 식단의 '식사' = 아침/점심/저녁)과 날짜로 찾아라. " +
+  "어떤 칸(예: '음식')이 비어 있어도 그 행이 '없는 것'이 아니다. 빈 값은 그냥 비어 있을 뿐, 행은 존재한다. " +
+  '예: 오늘 "아침" 행이 있는데 음식이 비어 있으면, 그 행은 분명히 존재하므로 "아침 기록이 없다"고 하지 말고 그 행을 삭제 대상으로 삼아라. ' +
+  "쓰기는 실행 직전에 시스템이 사용자에게 y/N로 한 번 확인을 받는다. " +
+  "그러니 너는 '이렇게 추가할까요?' 같은 확인 질문을 따로 하지 말고, 필요한 정보가 다 있으면 바로 도구를 호출해라. " +
+  "정보가 부족할 때만(예: 어떤 행을 고칠지 불명확) 되물어라. " +
+  // 일기 → 의사결정 로그 작성 워크플로우
+  // (사용자는 일기를 노션에 직접 쓰고, 비서에서는 명령으로 이 분석을 돌린다.)
+  "[일기로 의사결정 로그 만들기] 사용자가 '오늘 일기 분석해서 결정 기록해줘'처럼 요청하면 이렇게 한다: " +
+  "(1) get_diary_details로 해당 날짜(보통 오늘)의 일기를 본문까지 읽는다. " +
+  "일기의 실제 내용은 '본문' 필드에 있다(get_diaries는 감정지표만 주니 쓰지 마라). 일기는 사용자가 노션에 직접 써 둔 것이다. " +
+  "(2) 그 일기 본문에서 사용자가 '내린 결정'을 찾는다. 하루에 결정이 여러 개일 수 있으니 보이는 만큼 다 뽑는다. " +
+  "일기는 구어체·오타·이모지·자음 웃음(ㅋㅋ)·줄임말이 많다. 글자 그대로 읽지 말고 '무슨 뜻인지'로 해석해라 " +
+  "(예: '하재서'→'하자고 해서', '에1휴'→'에휴', '지원했다ㅋㅋ'→지원하기로 함). 오타가 많아도 맥락으로 결정을 알아내라. " +
+  "결정으로 볼 만한 게 없으면 지어내지 말고 '그날 일기엔 기록할 결정이 안 보인다'고 솔직히 답한다. " +
+  "(3) 중복 방지: 행을 만들기 전에 get_decisions로 그 날짜의 기존 결정들을 읽어, " +
+  "'같은 날짜 + 같은 결정(제목)'이 이미 있으면 그 결정만 건너뛴다. 같은 날이라도 제목이 다른 결정은 새로 추가한다. " +
+  "(4) 새 결정마다 create_record(database='decision')로 decision DB 컬럼에 맞춰 채운다 — " +
+  "결정(무엇을 하기로 했는지 짧은 제목/title), 분야(커리어·건강·관계·돈·공부 등에서 적절히/select), 날짜(그 일기 날짜), " +
+  "이유(왜 그렇게 정했는지), 대안(고려했지만 택하지 않은 선택지), 교훈(있으면), 만족도(일기에서 드러나면; 없으면 비워 둔다). " +
+  "(5) 일기 본문에 근거가 있는 내용만 적는다. 추측으로 칸을 억지로 채우지 말고, 모르는 칸은 비워 둔다. " +
+  "(6) 단, 로그에 적는 값은 일기 말투를 그대로 베끼지 말고 '깔끔한 표준어'로 정리해서 쓴다 — " +
+  "오타는 고치고, 이모지·ㅋㅋ·줄임말·욕설은 빼고, 결정/이유/대안/교훈은 간결한 문장으로 다듬는다. " +
+  "(뜻은 일기에 충실하되 표현만 정돈하는 것. 없는 내용을 새로 지어내라는 뜻은 아니다.) " +
+  "쓰기는 어차피 시스템이 y/N로 확인하니, 결정을 찾았으면 (각 결정마다 한 번씩) 바로 create_record를 호출해라.";
+
+// 대화 기록. API는 상태가 없어서 매번 전체 기록을 보낸다.
+// 모듈 수준에 두면 질문 사이에도 유지돼서 "후속 질문"이 가능하다.
+const messages: Anthropic.MessageParam[] = [];
+
+// 대화 기록·조회 캐시를 비운다. REPL의 "clear" 명령이 부른다.
+// 주제를 바꿀 때 쓰면 토큰(비용)이 다시 가벼워진다.
+export function resetConversation(): void {
+  messages.length = 0; // 배열 내용을 비운다 (const라도 .length=0 은 가능).
+  clearQueryCache(); // 조회 캐시도 함께 비운다.
+}
+
+// 질문 하나를 받아, Claude가 도구를 다 쓰고 최종 답을 낼 때까지 돌린다.
+// confirmWrite: 쓰기 도구 실행 직전에 사용자 확인을 받는 콜백(주입).
+export async function ask(
+  userQuestion: string,
+  confirmWrite: ConfirmWrite
+): Promise<void> {
+  messages.push({ role: "user", content: userQuestion });
+
+  // 이번 질문을 처리할 모델을 한 번 정해서, 도구 호출 루프 내내 같은 모델을 쓴다.
+  const model = pickModel(userQuestion);
+  const label = model === MODEL_COMPLEX ? "Sonnet · 복잡 분석" : "Haiku · 간단 조회";
+  console.log(`🤖 모델: ${label}`);
+
+  // 이번 질문에서만 쓴 토큰.
+  const usage = newTokens();
+
+  // 이번 질문 시작 시점의 날짜를 잡는다(도구 루프 내내 동일하게 사용).
+  const ctx: AgentContext = {
+    confirmWrite,
+    today: todayKST(),
+    log: (m) => console.log(m),
+    usage,
+  };
+
+  const { text } = await runToolLoop({
+    model,
+    systemText: system,
+    registry,
+    messages,
+    ctx,
+  });
+
+  console.log(text);
+  console.log(`\n📊 이번 질문 토큰 — ${fmtTokens(usage)}`);
+}
