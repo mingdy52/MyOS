@@ -9,6 +9,7 @@ import { syncSchemas } from "./notion/schema-sync.js";
 // 이 파일은 대화형(REPL) 껍데기 — 입력을 받아 명령을 가르고, 질문은 ask()에 넘긴다.
 import { ask, resetConversation } from "./agent/personal.js";
 import { getSessionSummary, todayKST } from "./agent/core.js";
+import { loadMemories, MAX_MEMORIES } from "./memory.js";
 // "/diet" 전용 파이프라인(사진 분석 → 음식 칸 채우기 / 빈 페이지 삭제)은 diet.ts에 있다.
 import { runDiet } from "./diet.js";
 
@@ -51,9 +52,10 @@ function printHelp(): void {
   console.log("   /decide <부터> <까지> 그 기간 일기를 몰아서 작성");
   console.log("   /diet         음식 칸이 빈 식단 페이지의 사진을 분석해 음식 입력");
   console.log("                 (사진 없는 빈 페이지는 삭제, 둘 다 y/N 확인)");
+  console.log("   memory        비서가 나에 대해 기억하고 있는 것 보기");
   console.log("   token         이번 세션 누적 토큰 사용량 보기");
   console.log("   refresh       노션에서 DB 스키마 다시 발견(새 DB·컬럼 반영)");
-  console.log("   clear         대화 기록·조회 캐시 비우기");
+  console.log("   clear         대화 기록·조회 캐시 비우기 (장기 기억은 남음)");
   console.log("   exit          종료 (Ctrl+C 도 가능)");
   console.log("   그 외 입력    질문으로 처리\n");
 }
@@ -73,8 +75,26 @@ while (true) {
   // "clear" → 대화 기록·조회 캐시 비우기. 주제를 바꿀 때 쓰면 토큰(비용)이 다시 가벼워진다.
   if (question === "clear") {
     resetConversation();
-    console.log("\n🧹 대화 기록과 조회 캐시를 비웠어요.\n");
+    console.log("\n🧹 대화 기록과 조회 캐시를 비웠어요. (장기 기억은 그대로예요)\n");
     continue; // ask() 안 부르고 다음 질문으로.
+  }
+
+  // "memory" → 비서가 나에 대해 뭘 알고 있는지 보여준다.
+  // 매 질문마다 시스템 프롬프트로 들어가는 내용이라, 이상한 게 끼어 있으면 여기서 눈에 띈다.
+  // (지우려면 비서에게 "그건 이제 아니야"라고 말하거나 data/memory.json을 직접 고치면 된다.)
+  if (question === "memory") {
+    const memories = await loadMemories();
+    if (memories.length === 0) {
+      console.log("\n🧠 아직 기억하는 게 없어요. 대화하다 보면 알아서 쌓입니다.\n");
+    } else {
+      console.log(`\n🧠 기억하고 있는 것 (${memories.length}/${MAX_MEMORIES})`);
+      for (const m of memories) {
+        console.log(`   • [${m.분류}] ${m.내용}`);
+        console.log(`     ${m.id} · ${m.날짜} 기억함`);
+      }
+      console.log();
+    }
+    continue;
   }
 
   // "token" → 이번 세션에 쓴 토큰 누적을 보여준다.

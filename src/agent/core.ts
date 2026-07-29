@@ -133,10 +133,18 @@ export function getSessionSummary(): string {
 // 두 번째 호출부터 이 부분이 cache_read 로 잡혀 거의 공짜(정가의 ~10%)로 처리된다 → 토큰 절감.
 // 날짜만 매번 바뀌므로 캐시 블록 "뒤"에 따로 붙인다: 정적 캐시는 그대로 유지되고,
 // 같은 날엔 날짜도 동일해 캐시가 계속 먹는다. 자정을 넘긴 첫 질문에서만 갱신된다.
-function buildSystem(text: string, today: string): Anthropic.TextBlockParam[] {
+// context(장기 기억 등)도 날짜와 같은 칸에 둔다 — 캐시 블록 "뒤"다.
+// 기억이 하나 늘 때마다 앞의 큰 캐시가 통째로 깨지면 손해가 크기 때문이다.
+// (캐시는 앞에서부터 글자가 똑같아야 유효하다. 뒤쪽이 바뀌는 건 앞쪽 캐시를 안 건드린다.)
+function buildSystem(
+  text: string,
+  today: string,
+  context?: string
+): Anthropic.TextBlockParam[] {
+  const tail = [`오늘 날짜는 ${today}야.`, context].filter(Boolean).join("\n\n");
   return [
     { type: "text", text, cache_control: { type: "ephemeral" } },
-    { type: "text", text: `오늘 날짜는 ${today}야.` },
+    { type: "text", text: tail },
   ];
 }
 
@@ -181,6 +189,8 @@ export async function runToolLoop(opts: {
   registry: ToolRegistry;
   messages: Anthropic.MessageParam[];
   ctx: AgentContext;
+  // 매번 달라질 수 있는 배경 정보(장기 기억 등). 캐시 블록 뒤에 붙는다.
+  context?: string;
 }): Promise<{ text: string; tokens: Tokens }> {
   const { model, systemText, registry, messages, ctx } = opts;
 
@@ -194,7 +204,7 @@ export async function runToolLoop(opts: {
     })
   );
 
-  const system = buildSystem(systemText, ctx.today);
+  const system = buildSystem(systemText, ctx.today, opts.context);
   const tokens = newTokens(); // 이번 실행에서만 쓴 토큰(세션 누적과 별도로 보여주려고).
 
   while (true) {

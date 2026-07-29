@@ -5,6 +5,9 @@ node_modules
 # 동적 발견한 노션 스키마 캐시 (언제든 refresh로 다시 만들 수 있음)
 .cache
 
+# 비서가 나에 대해 기억한 것 — 개인 정보이고, 캐시와 달리 다시 만들 수 없다
+/data
+
 /src/generated/prisma
 
 # 포트폴리오 사이트는 Actions가 빌드해 배포한다 → 생성물은 커밋하지 않는다
