@@ -42,11 +42,13 @@ const PROFILE = {
   avatar: "profile.jpg", // assets/profile.jpg 에 넣으면 표시. 없으면 점선 placeholder.
   // 자기소개(문단별). 본인이 직접 쓴 글이라 여기서 관리한다. (비우면 Claude가 만든 summary를 쓴다)
   intro: [
-    "저는 여행을 좋아합니다. 정확히는, 새로운 장소를 방문하는 것 자체보다 낯선 환경을 이해하고 그 안에서 길을 찾아가는 과정을 좋아합니다.",
-    "남미 2개월 여행을 준비하면서도 여러 국가를 이동하는 복잡한 동선과 네트워크가 불안정한 환경이라는 문제를 마주했습니다. 그리고 그 경험은 오프라인에서도 사용할 수 있는 여행 기록 앱을 직접 개발하는 계기가 되었습니다. 저는 새로운 환경을 만나면 먼저 관찰하고, 문제를 발견하면 원인을 이해하려고 합니다. 그리고 가능하다면 직접 해결해 보려 합니다.",
-    "개발 역시 저에게는 같은 과정입니다. 기술을 사용하는 것보다 문제를 탐구하는 일에 더 큰 흥미를 느끼며, 실제 경험에서 얻은 질문을 서비스로 만들어 가는 개발자입니다.",
+    "저는 여행을 좋아합니다. 정확히는 새로운 장소를 방문하는 것보다, 낯선 환경을 이해하고 그 안에서 길을 찾아가는 과정을 즐깁니다.",
+    "남미 2개월 여행을 준비하면서도 여러 국가를 이동하는 복잡한 동선과 불안정한 네트워크 환경을 마주했습니다. 그 과정에서 '오프라인에서도 문제없이 사용할 수 있는 여행 기록 앱이 있으면 좋겠다'는 생각이 들었고, 직접 개발하게 되었습니다.",
+    "저는 새로운 환경을 만나면 먼저 불편함을 관찰합니다. 왜 그런 문제가 생기는지 이해하고, 해결할 수 있다면 직접 만들어 봅니다.",
+    "개발 역시 저에게는 같은 과정입니다. 기술 자체보다 문제를 탐구하는 일에 더 큰 흥미를 느끼며, 실제 경험에서 얻은 질문을 서비스로 만들어가는 개발자입니다.",
   ],
 };
+
 
 // portfolio.json 의 형태. portfolio-draft.ts(Claude)가 채우는 모양과 같다.
 type TechInfo = { name: string; level?: string; confidence?: string | number };
@@ -285,10 +287,15 @@ function renderPage(c: Content): string {
   .modal h3 { margin:0 0 6px; font-size:24px; }
   .modal .project-meta { margin:0 0 14px; }
   .modal .chips { margin:0 0 20px; }
+  /* 닫기 버튼은 스크롤을 내려도 계속 보이게 sticky. 스크롤되는 건 .modal 자신이다.
+     음수 margin으로 본문 폭 바깥(좌우 여백)에 띄워 글자를 가리지 않게 한다. */
   .modal-close {
-    float:right; border:none; background:#f0ecf8; color:var(--ink); cursor:pointer;
+    position:sticky; top:0; z-index:3; float:right; margin-right:-34px;
+    border:none; background:#f0ecf8; color:var(--ink); cursor:pointer;
     width:34px; height:34px; border-radius:50%; font-size:18px; line-height:1;
+    box-shadow:0 2px 10px rgba(80,70,110,.18);
   }
+  @media (max-width:600px) { .modal-close { margin-right:-12px; } }
 
   /* 화면 스크린샷 — 폰 목업 프레임 나란히 */
   .phones {
@@ -348,6 +355,8 @@ function renderPage(c: Content): string {
   .detail p { margin:8px 0; }
   .detail ul, .detail ol { margin:8px 0; padding-left:20px; }
   .detail li { margin:5px 0; }
+  .detail ul.todo { list-style:none; padding-left:2px; }
+  .detail .sub { padding-left:16px; }
   .detail hr { border:none; border-top:1px solid #efeaf6; margin:18px 0; }
   .detail a { color:#c77fa0; }
   .detail code { background:#f4f0fa; padding:1px 6px; border-radius:6px; font-size:13px; }
@@ -424,9 +433,6 @@ function renderPage(c: Content): string {
       // 본문(노션 변환 HTML)의 이미지 자리(@@IMG@@) 처리.
       // '아키텍처/Architecture' 제목 바로 뒤의 자리에만 아키텍처 이미지를 넣고, 나머지 자리표(로고 등)는 지운다.
       let body = p.detailHtml || ("<p>" + esc(p.description || "") + "</p>");
-      // 본문 맨 앞 헤더(제목·기술·기간 등)는 모달 상단과 중복되므로 첫 구분선 전까지 잘라낸다.
-      const firstHr = body.indexOf("<hr>");
-      if (firstHr !== -1 && firstHr < 1500) body = body.slice(firstHr + 4);
       const archPool = (p.arch || []).slice();
       const headMatch = /<h[2-5][^>]*>[^<]*(?:아키텍처|architecture)/i.exec(body);
       const archPos = headMatch ? body.indexOf("@@IMG@@", headMatch.index + headMatch[0].length) : -1;

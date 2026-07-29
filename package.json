@@ -8,6 +8,7 @@
     "report": "tsx src/report.ts",
     "portfolio": "tsx src/portfolio-draft.ts",
     "site": "tsx src/site.ts",
+    "open": "tsx src/site.ts && open docs/index.html",
     "test": "node --import tsx --test 'src/**/*.test.ts'",
     "build": "tsc",
     "start": "node dist/index.js"
