@@ -135,7 +135,7 @@ function renderCard(p: Content["projects"][number], idx: number): string {
 
 // period("2025-11-01" 또는 "2025-08-01 ~ 2026-02-28")에서 시작일을 뽑아 정렬 키로 쓴다.
 // 날짜가 없으면 빈 문자열 → 맨 뒤로.
-const startDate = (period?: string) => String(period ?? "").split("~")[0].trim();
+const startDate = (period?: string) => String(period ?? "").split("~")[0]?.trim() ?? "";
 
 // ── 프로젝트 섹션: 개인 / 회사로 나눠 각각 2열 그리드 ──────────
 function renderProjects(projects: Content["projects"]): string {
