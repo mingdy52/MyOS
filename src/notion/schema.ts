@@ -159,6 +159,24 @@ export const schemas: Record<string, DbSchema> = {
       메모: "text",
     },
   },
+  // 콘텐츠 보관함 — 기분이 가라앉았을 때 꺼내 볼 영상·음악·사진·글귀를 모아둔다.
+  // Media Agent(agent/media.ts)가 이 DB만 읽고 쓴다.
+  // 날짜 컬럼이 없다(언제 저장했는지보다 "무엇에 잘 듣는지"가 중요한 DB라서).
+  // 그래서 getRecords가 기간 필터·최신순 정렬을 걸지 않고 전체를 가져온다.
+  // '좋아요' 같은 평가 칸도 없다 — 여기 있다는 것 자체가 사용자가 좋아했다는 뜻이라
+  // 별도 표시가 중복이 된다. 별로였던 건 남겨두고 끄는 게 아니라 그냥 지운다.
+  media: {
+    title: "콘텐츠",
+    dataSourceId: process.env.NOTION_MEDIA_DATA_SOURCE_ID!,
+    columns: {
+      제목: "title",
+      URL: "text",
+      유형: "select", // 영상 / 음악 / 사진 / 글귀 / ASMR
+      감정: "multi_select", // 이 콘텐츠가 잘 듣는 감정 (우울·불안·지침·외로움·화남 …)
+      태그: "multi_select", // 내용 태그 (강아지·자연·잔잔함 …)
+      메모: "text",
+    },
+  },
   // 주간 리포트 저장용. 컬럼은 제목(title) 하나뿐이고,
   // AI 분석 요약 본문은 길어서 컬럼이 아니라 페이지 본문에 넣는다(report.ts).
   report: {

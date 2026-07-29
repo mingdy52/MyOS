@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { AgentContext, ToolRegistry, Tokens } from "./types.js";
+import type { Agent, AgentContext, ToolRegistry, Tokens } from "./types.js";
 
 // ── 에이전트 코어 ─────────────────────────────────────────────
 // "도구를 들고 있는 Claude를 답이 나올 때까지 굴리는 엔진".
@@ -67,6 +67,33 @@ async function runTool(
     // 오류도 문자열로 돌려주면 루프가 죽지 않고 Claude가 보고 고쳐 시도한다.
     return `오류: ${e?.message ?? String(e)}`;
   }
+}
+
+// ── 서브에이전트를 '도구'로 감싸기 ────────────────────────────
+// 라우팅을 위해 별도의 Router 클래스를 두지 않는다. 이미 Claude가 매 턴
+// "어떤 도구를 부를까"를 고르고 있으니, 서브에이전트를 도구 하나로 노출하면
+// 그 선택이 그대로 라우팅이 된다 — 규칙표를 사람이 관리할 필요가 없다.
+//
+// 새 도메인을 붙이는 비용: Agent 규격을 만족하는 객체 하나 + 배열에 한 줄.
+export function delegationTools(agents: Agent[]): ToolRegistry {
+  const registry: ToolRegistry = {};
+  for (const agent of agents) {
+    registry[agent.name] = {
+      description: agent.description,
+      properties: {
+        request: { type: "string", description: agent.requestHint },
+      },
+      // 위임 자체는 읽기/쓰기가 아니다. 서브에이전트 안에서 쓰기 도구를 부르면
+      // 그쪽 루프가 자기 ctx.confirmWrite로 y/N 확인을 따로 받는다.
+      run: async (input, ctx) => {
+        ctx.log(`   ↳ ${agent.name}에 위임: ${input.request}`);
+        const answer = await agent.run(String(input.request ?? ""), ctx);
+        ctx.log(`   ↳ ${agent.name} 응답 받음`);
+        return answer;
+      },
+    };
+  }
+  return registry;
 }
 
 // ── 토큰 사용량 모니터링 ──────────────────────────────────────

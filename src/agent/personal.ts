@@ -1,27 +1,39 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import {
   runToolLoop,
+  delegationTools,
   clearQueryCache,
   fmtTokens,
   newTokens,
   todayKST,
 } from "./core.js";
 import { notionTools } from "../tools/notion.js";
+import { mediaAgent } from "./media.js";
 // 모델 라우팅 규칙은 순수 모듈로 분리했다(단위 테스트 대상). model-router.test.ts 참고.
 import { pickModel, MODEL_COMPLEX } from "../model-router.js";
-import type { AgentContext, ConfirmWrite, ToolRegistry } from "./types.js";
+import type { Agent, AgentContext, ConfirmWrite, ToolRegistry } from "./types.js";
 
-// ── Personal Agent ────────────────────────────────────────────
-// 사용자와 직접 대화하는 에이전트. 노션 도구를 들고 질문에 답한다.
+// ── Personal Agent (오케스트레이터) ───────────────────────────
+// 사용자와 직접 대화하는 유일한 에이전트. 역할은 두 가지다:
+//  (1) 자기 도구(노션 읽기·쓰기)로 직접 처리한다.
+//  (2) 자기 일이 아니면 도메인 전문 에이전트에게 맡기고, 결과를 정리해 전달한다.
 //
 // 터미널(stdin) 의존은 여기 두지 않는다: 쓰기 확인(y/N)은 confirmWrite 콜백으로 주입받아
 // REPL이든 배치든 원하는 방식으로 확인을 처리할 수 있게 한다(=stdin과 분리).
 
-// 이 에이전트가 쥔 도구 전부.
-const registry: ToolRegistry = { ...notionTools };
+// 도메인이 늘면 여기 한 줄씩 더한다. 다른 코드는 안 고쳐도 된다.
+const subAgents: Agent[] = [mediaAgent];
+
+// 이 에이전트가 쥔 도구 전부 = 노션 도구 + 서브에이전트 위임 도구.
+const registry: ToolRegistry = {
+  ...notionTools,
+  ...delegationTools(subAgents),
+};
 
 const system =
-  "너는 사용자의 노션 가계부/운동/식단/일기, 그리고 의사결정 로그 데이터를 분석하는 비서야. " +
+  "너는 사용자의 개인 비서를 총괄하는 에이전트야. " +
+  "노션에 쌓인 가계부·운동·식단·일기·의사결정 기록을 읽고 쓸 수 있고, " +
+  "네 일이 아닌 영역은 전문 에이전트에게 맡긴다. " +
   "의사결정 로그(get_decisions)에는 어떤 결정을 왜 했는지·대안·교훈·만족도가 쌓인다. " +
   "사용자가 가치관·판단 성향·후회 패턴을 물으면, 여러 결정을 가로질러 보고 " +
   "반복되는 기준(무엇을 중시하고 무엇을 포기하는지)과 만족도와의 관계를 짚어줘. " +
@@ -43,6 +55,15 @@ const system =
   "쓰기는 실행 직전에 시스템이 사용자에게 y/N로 한 번 확인을 받는다. " +
   "그러니 너는 '이렇게 추가할까요?' 같은 확인 질문을 따로 하지 말고, 필요한 정보가 다 있으면 바로 도구를 호출해라. " +
   "정보가 부족할 때만(예: 어떤 행을 고칠지 불명확) 되물어라. " +
+  // 위임 — 오케스트레이터로서의 역할
+  "[위임] 전문 에이전트에게 넘기는 도구(예: media_agent)도 다른 도구처럼 그냥 호출하면 된다. " +
+  "다만 서브에이전트는 사용자의 노션 기록을 볼 수 없다. 그래서 위임하기 전에 네가 먼저 필요한 기록을 조회해 상황을 파악하고, " +
+  "파악한 내용을 request에 문장으로 담아 넘겨야 한다. " +
+  "예를 들어 사용자가 '오늘 기분이 너무 안 좋아'라고 하면: " +
+  "(1) 최근 며칠 일기를 get_diary_details로 본문까지 읽고 필요하면 운동·수면·소비 기록도 같이 봐서 무슨 일이 있었는지 파악한다. " +
+  "(2) 파악한 감정과 상황을 request에 적어 media_agent에 위임한다(예: '야근이 이어져 지쳐 있고 스트레스 높음. 잔잔한 영상 2개 추천'). " +
+  "(3) 돌아온 답을 그대로 붙여넣지 말고, 네가 파악한 맥락과 엮어서 사용자에게 전한다 — 왜 지금 이게 도움이 될지까지. " +
+  "서브에이전트가 '보관함에 저장된 게 없다'고 하면 그 사실을 솔직히 전해라. 없는 링크를 네가 지어내면 안 된다. " +
   // 일기 → 의사결정 로그 작성 워크플로우
   // (사용자는 일기를 노션에 직접 쓰고, 비서에서는 명령으로 이 분석을 돌린다.)
   "[일기로 의사결정 로그 만들기] 사용자가 '오늘 일기 분석해서 결정 기록해줘'처럼 요청하면 이렇게 한다: " +
@@ -65,6 +86,7 @@ const system =
 
 // 대화 기록. API는 상태가 없어서 매번 전체 기록을 보낸다.
 // 모듈 수준에 두면 질문 사이에도 유지돼서 "후속 질문"이 가능하다.
+// (서브에이전트는 이 기록을 공유하지 않는다 — 필요한 맥락은 위임 request에 담겨 간다.)
 const messages: Anthropic.MessageParam[] = [];
 
 // 대화 기록·조회 캐시를 비운다. REPL의 "clear" 명령이 부른다.
@@ -87,7 +109,7 @@ export async function ask(
   const label = model === MODEL_COMPLEX ? "Sonnet · 복잡 분석" : "Haiku · 간단 조회";
   console.log(`🤖 모델: ${label}`);
 
-  // 이번 질문에서만 쓴 토큰.
+  // 이번 질문에서만 쓴 토큰. ctx로 흘려보내면 서브에이전트가 쓴 것까지 여기 쌓인다.
   const usage = newTokens();
 
   // 이번 질문 시작 시점의 날짜를 잡는다(도구 루프 내내 동일하게 사용).
