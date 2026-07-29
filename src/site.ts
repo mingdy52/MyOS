@@ -183,6 +183,9 @@ function renderPage(c: Content): string {
     --dim:#9a9aae; --accent:#f7a8c4;
   }
   * { box-sizing: border-box; }
+  /* 모달을 열 때 뒤 목록 스크롤을 잠그는데(overflow:hidden), 그때 스크롤바가 사라지며
+     화면이 옆으로 밀리지 않게 자리를 미리 비워둔다. */
+  html { scrollbar-gutter: stable; }
   body {
     margin:0; padding:0 16px 64px; color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo",sans-serif;
@@ -282,6 +285,8 @@ function renderPage(c: Content): string {
   .modal {
     background:#fff; border-radius:24px; padding:44px 52px; max-width:1080px; width:100%;
     max-height:90vh; overflow:auto; box-shadow:0 20px 60px rgba(80,70,110,.3);
+    /* 끝까지 스크롤한 뒤 더 굴려도 뒤 목록으로 넘어가지 않게 여기서 끊는다. */
+    overscroll-behavior: contain;
   }
   @media (max-width:600px) { .modal { padding:28px 22px; } }
   .modal h3 { margin:0 0 6px; font-size:24px; }
@@ -458,9 +463,16 @@ function renderPage(c: Content): string {
         leftover;
       overlay.classList.add("open");
       modal.scrollTop = 0;
+      // 어두운 배경 위에서 굴려도 뒤 목록이 움직이지 않게 아예 잠근다.
+      // (모달 안쪽은 .modal의 overscroll-behavior가 막아준다)
+      document.body.style.overflow = "hidden";
       initCarousel();
     }
-    function closeModal() { overlay.classList.remove("open"); stopCarousel(); }
+    function closeModal() {
+      overlay.classList.remove("open");
+      document.body.style.overflow = "";
+      stopCarousel();
+    }
 
     // 화면 스크린샷: 세로(모바일)는 폰 프레임에 나란히, 가로·정사각은 고정 크기 캐러셀.
     function media(imgs) {
