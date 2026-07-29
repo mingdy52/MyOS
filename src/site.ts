@@ -352,6 +352,10 @@ function renderPage(c: Content): string {
   .detail h2 { font-size:22px; margin:26px 0 10px; }
   .detail h3 { font-size:19px; margin:24px 0 10px; }
   .detail h4, .detail h5 { font-size:16.5px; margin:18px 0 6px; color:#7a6a8e; }
+  /* 노션에서 제목에 볼드를 먹인 것과 아닌 것이 섞여 들어온다.
+     제목은 이미 굵기 700인데 브라우저 기본 strong 규칙이 'bolder'(상대값)라 900까지 올라가,
+     같은 h4끼리도 굵기가 달라 보인다. 제목 안의 볼드는 무시해 굵기를 통일한다. */
+  .detail :is(h2,h3,h4,h5) strong { font-weight:inherit; }
   .detail p { margin:8px 0; }
   .detail ul, .detail ol { margin:8px 0; padding-left:20px; }
   .detail li { margin:5px 0; }
