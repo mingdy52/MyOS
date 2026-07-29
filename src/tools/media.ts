@@ -2,6 +2,7 @@ import { getRecords } from "../notion/query.js";
 import { createRecord, deleteRecord } from "../notion/mutate.js";
 import { schemas } from "../notion/schema.js";
 import { printWritePreview } from "./notion.js";
+import { searchVideos, hasApiKey } from "../youtube.js";
 import type { ToolRegistry } from "../agent/types.js";
 
 // ── 콘텐츠 도구 모음 ──────────────────────────────────────────
@@ -90,6 +91,48 @@ export const mediaTools: ToolRegistry = {
       // 제목도 링크도 없는 행은 노션에서 실수로 생긴 빈 줄이다. 추천 후보가 될 수 없으니 뺀다.
       const real = rows.filter((r) => r.제목 || r.URL);
       return real.filter((r) => matches(r, i));
+    },
+  },
+
+  // 유일하게 노션 밖(바깥 세상)을 보는 도구.
+  // 보관함이 비었거나 맞는 게 없을 때, 새 후보를 실제로 찾아오는 통로다.
+  search_youtube: {
+    description:
+      "유튜브에서 영상을 검색해 실제로 존재하는 후보를 가져온다. " +
+      "보관함(list_media)에 맞는 게 없거나, 사용자가 새 영상을 찾아달라고 할 때 쓴다. " +
+      "검색어는 감정 그대로가 아니라 '보고 싶은 영상의 내용'으로 바꿔서 넣어라 " +
+      '(예: 감정이 "지침"이면 "잔잔한 자연 풍경 영상", "귀여운 강아지 영상"처럼). ' +
+      "검색은 할당량이 있으니 한 번에 좋은 검색어로 부르고, 같은 뜻의 검색어를 여러 번 반복하지 마라. " +
+      "여기서 나온 결과는 아직 저장된 게 아니다 — 사용자가 마음에 들어 하면 save_media로 따로 저장해라.",
+    properties: {
+      query: {
+        type: "string",
+        description: '유튜브 검색어. 예: "잔잔한 새벽 노을 영상"',
+      },
+      maxResults: {
+        type: "number",
+        description: "가져올 개수(최대 10). 기본 5. 추천만 할 거면 3~5면 충분하다",
+      },
+      duration: {
+        type: "string",
+        enum: ["any", "short", "medium", "long"],
+        description:
+          "길이 필터. short=4분 미만(짧게 보고 싶을 때), medium=4~20분, long=20분 초과, any=상관없음",
+      },
+    },
+    run: async (i) => {
+      if (!hasApiKey()) {
+        return (
+          "유튜브 API 키가 없어서 검색할 수 없다. " +
+          "사용자에게 이렇게 안내해라: Google Cloud 콘솔에서 YouTube Data API v3를 켜고 " +
+          "API 키를 발급받아 .env에 YOUTUBE_API_KEY=... 로 넣은 뒤 다시 실행하면 된다."
+        );
+      }
+      return searchVideos({
+        query: i.query,
+        maxResults: i.maxResults,
+        duration: i.duration,
+      });
     },
   },
 
