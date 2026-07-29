@@ -8,6 +8,7 @@ import { syncSchemas } from "./notion/schema-sync.js";
 //   agent/media.ts    — 콘텐츠 담당 서브에이전트
 // 이 파일은 대화형(REPL) 껍데기 — 입력을 받아 명령을 가르고, 질문은 ask()에 넘긴다.
 import { ask, resetConversation } from "./agent/personal.js";
+import { reflectionAgent } from "./agent/reflection.js";
 import { getSessionSummary, todayKST } from "./agent/core.js";
 import { loadMemories, MAX_MEMORIES } from "./memory.js";
 // "/diet" 전용 파이프라인(사진 분석 → 음식 칸 채우기 / 빈 페이지 삭제)은 diet.ts에 있다.
@@ -123,12 +124,16 @@ while (true) {
     const from = args[0] || todayKST();
     const to = args[1] || from;
     const span = from === to ? `${from} 일기를` : `${from}부터 ${to}까지의 일기를`;
-    const prompt =
-      `${span} get_diary_details로 본문까지 읽고 분석해서, 그동안 내가 내린 결정들을 ` +
-      `의사결정 로그(decision)에 기록해줘. 하루에 결정이 여러 개면 다 뽑되, ` +
-      `같은 날 같은 결정(제목)이 이미 있으면 그건 건너뛰어.`;
+    // 명령으로 부른 시점에 "누가 할 일인지"는 이미 정해졌다. 그래서 Personal을 거치지 않고
+    // 회고 담당을 바로 부른다 — 라우팅만 시키려고 상위 모델을 한 번 더 태울 이유가 없다.
+    // (자연어로 "일기 분석해줘"라고 하면 그때는 Personal이 알아서 위임한다.)
     console.log();
-    await ask(prompt, confirmWrite);
+    const answer = await reflectionAgent.run(
+      `${span} 읽고 분석해서, 그동안 내가 내린 결정들을 의사결정 로그에 기록해줘. ` +
+        `하루에 결정이 여러 개면 다 뽑되, 같은 날 같은 결정(제목)이 이미 있으면 그건 건너뛰어.`,
+      { confirmWrite, today: todayKST(), log: (m) => console.log(m) }
+    );
+    console.log(answer);
     console.log();
     continue;
   }
