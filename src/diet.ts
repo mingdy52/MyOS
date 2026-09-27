@@ -7,7 +7,9 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { getRecords } from "./notion/query.js";
 import { getPageImages } from "./notion/blocks.js";
-import { updateRecord, deleteRecord } from "./notion/mutate.js";
+import { updateRecord, deleteRecord, createRecord } from "./notion/mutate.js";
+import { todayKST } from "./agent/core.js";
+import { topFoods } from "./diet-rank.js";
 import { MODEL_COMPLEX } from "./model-router.js";
 import type { ConfirmWrite } from "./agent/types.js";
 
@@ -157,4 +159,41 @@ export async function runDiet(confirmWrite: ConfirmWrite): Promise<void> {
   }
 
   console.log(`\n🍽  끝. ${filled}건 채우고, ${deleted}건 삭제했어요.`);
+}
+
+// ── "식단:점심" — 자주 먹는 음식 골라 넣기 ─────────────────────
+// 같은 음식을 한동안 반복해서 먹으니, 매번 이름을 타이핑하는 대신
+// 최근 한 달 그 식사에 자주 먹은 목록을 보여주고 번호로 골라 오늘 행을 만든다.
+// 번호(또는 새 음식명)를 직접 고르는 게 곧 확인이라, 쓰기 y/N을 한 번 더 묻지 않는다.
+export async function runDietPick(
+  meal: string,
+  prompt: (q: string) => Promise<string>
+): Promise<void> {
+  const today = todayKST();
+  const from = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10); // 한 달 전
+
+  const rows: any[] = await getRecords("diet", { from, to: today });
+  const top = topFoods(rows, meal);
+
+  if (top.length === 0) {
+    console.log(`🍽  최근 한 달 '${meal}' 기록이 없어요.`);
+  } else {
+    console.log(`🍽  최근 한 달 '${meal}'에 자주 먹은 음식`);
+    top.forEach((t, i) => console.log(`   ${i + 1}. ${t.음식} (${t.횟수}회)`));
+  }
+
+  const answer = (await prompt("   번호를 고르거나 음식명을 적으세요 (취소: 엔터) ")).trim();
+  if (!answer) {
+    console.log("   취소");
+    return;
+  }
+  // 숫자면 목록에서 고른 것, 아니면 적은 걸 그대로 쓴다(목록에 없는 걸 먹은 날).
+  const picked = /^\d+$/.test(answer) ? top[Number(answer) - 1]?.음식 : answer;
+  if (!picked) {
+    console.log("   그런 번호는 없어요.");
+    return;
+  }
+
+  await createRecord("diet", { 날짜: today, 식사: meal, 음식: picked });
+  console.log(`   ✅ ${today} · ${meal} · ${picked} 기록 완료`);
 }

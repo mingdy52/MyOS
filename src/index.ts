@@ -12,7 +12,7 @@ import { reflectionAgent } from "./agent/reflection.js";
 import { getSessionSummary, todayKST } from "./agent/core.js";
 import { loadMemories, MAX_MEMORIES } from "./memory.js";
 // "/diet" 전용 파이프라인(사진 분석 → 음식 칸 채우기 / 빈 페이지 삭제)은 diet.ts에 있다.
-import { runDiet } from "./diet.js";
+import { runDiet, runDietPick } from "./diet.js";
 
 // ── 대화형(REPL) 루프 ────────────────────────────────────────
 // 한 번 켜두고 질문을 계속 받는다. "exit"/"quit"/빈 줄이면 종료.
@@ -53,6 +53,8 @@ function printHelp(): void {
   console.log("   /decide <부터> <까지> 그 기간 일기를 몰아서 작성");
   console.log("   /diet         음식 칸이 빈 식단 페이지의 사진을 분석해 음식 입력");
   console.log("                 (사진 없는 빈 페이지는 삭제, 둘 다 y/N 확인)");
+  console.log("   식단:<식사>   그 식사에 최근 한 달 자주 먹은 음식 중 골라 오늘 기록");
+  console.log("                 (예: \"식단:점심\" → 번호 선택. 목록에 없으면 음식명 직접 입력)");
   console.log("   memory        비서가 나에 대해 기억하고 있는 것 보기");
   console.log("   token         이번 세션 누적 토큰 사용량 보기");
   console.log("   refresh       노션에서 DB 스키마 다시 발견(새 DB·컬럼·삭제 반영)");
@@ -134,6 +136,16 @@ while (true) {
       { confirmWrite, today: todayKST(), log: (m) => console.log(m) }
     );
     console.log(answer);
+    console.log();
+    continue;
+  }
+
+  // "식단:점심" → 최근 한 달 자주 먹은 음식 목록에서 골라 오늘 식단에 바로 기록.
+  // 같은 음식을 반복해 먹는 편이라, 음식명을 매번 타이핑하지 않게 만든 지름길이다.
+  const pick = question.match(/^식단\s*:\s*(.+)$/);
+  if (pick) {
+    console.log();
+    await runDietPick(pick[1]!.trim(), (q) => rl.question(q));
     console.log();
     continue;
   }
