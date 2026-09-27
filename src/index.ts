@@ -55,7 +55,7 @@ function printHelp(): void {
   console.log("                 (사진 없는 빈 페이지는 삭제, 둘 다 y/N 확인)");
   console.log("   memory        비서가 나에 대해 기억하고 있는 것 보기");
   console.log("   token         이번 세션 누적 토큰 사용량 보기");
-  console.log("   refresh       노션에서 DB 스키마 다시 발견(새 DB·컬럼 반영)");
+  console.log("   refresh       노션에서 DB 스키마 다시 발견(새 DB·컬럼·삭제 반영)");
   console.log("   clear         대화 기록·조회 캐시 비우기 (장기 기억은 남음)");
   console.log("   exit          종료 (Ctrl+C 도 가능)");
   console.log("   그 외 입력    질문으로 처리\n");
@@ -111,7 +111,7 @@ while (true) {
     console.log();
     await syncSchemas(schemas, { refresh: true });
     console.log(`\n📋 현재 DB: ${Object.keys(schemas).join(", ")}`);
-    console.log("   (새로 생긴 DB를 조회/쓰기 도구에도 노출하려면 한 번 재시작하세요.)\n");
+    console.log("   (도구 설명의 DB 목록까지 맞추려면 한 번 재시작하세요.)\n");
     continue;
   }
 

@@ -10,9 +10,11 @@ import { loadCache, saveCache } from "./schema-cache.js";
 //  - 어느 역할과도 안 맞으면 → 제목을 그대로 키로 새로 추가한다.
 //    (=코드 한 줄 안 고쳐도 새 DB가 조회/쓰기 도구에 바로 등장한다.)
 //  - 발견되지 않은 역할(예: 부모 페이지 밖에 있는 가계부)은 정적 스키마 그대로 둔다.
-function apply(
+//  - 직전 발견 결과(prev)에 있었는데 이번 발견에 없으면 → 노션에서 삭제된 것으로 보고 뺀다.
+export function apply(
   schemas: Record<string, DbSchema>,
-  found: DiscoveredSchemas
+  found: DiscoveredSchemas,
+  prev: DiscoveredSchemas | null
 ): void {
   // title → role 역방향 색인.
   const roleByTitle = new Map<string, string>();
@@ -35,6 +37,14 @@ function apply(
       };
     }
   }
+
+  // "발견 안 된 것 전부"가 아니라 "전에 발견됐던 것만" 지운다 — 부모 페이지 밖의 정적 seed 보호.
+  if (prev) {
+    for (const title of Object.keys(prev)) {
+      if (title in found) continue;
+      delete schemas[roleByTitle.get(title) ?? title];
+    }
+  }
 }
 
 // 스키마를 노션에서 동적으로 채운다.
@@ -50,7 +60,10 @@ export async function syncSchemas(
   const pageId = process.env.NOTION_DATA_PAGE_ID;
 
   try {
-    let found = opts.refresh ? null : loadCache();
+    // 캐시는 "직전에 노션에서 본 목록"이다. 다시 훑을 때는 비교 대상(prev)으로 쓴다 —
+    // 이번에 안 보이는 DB가 삭제된 것인지 판단하는 유일한 근거다.
+    const prev = loadCache();
+    let found = opts.refresh ? null : prev;
 
     if (!found) {
       if (!pageId) {
@@ -70,7 +83,7 @@ export async function syncSchemas(
       );
     }
 
-    apply(schemas, found);
+    apply(schemas, found, prev);
   } catch (e: any) {
     console.log(
       `⚠️  스키마 동적 발견 실패(정적 스키마로 계속 진행): ${e?.message ?? e}`
