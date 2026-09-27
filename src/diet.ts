@@ -163,7 +163,7 @@ export async function runDiet(confirmWrite: ConfirmWrite): Promise<void> {
 
 // ── "식단:점심" — 자주 먹는 음식 골라 넣기 ─────────────────────
 // 같은 음식을 한동안 반복해서 먹으니, 매번 이름을 타이핑하는 대신
-// 최근 한 달 그 식사에 자주 먹은 목록을 보여주고 번호로 골라 오늘 행을 만든다.
+// 최근 한 달 그 식사에 자주 먹은 목록을 보여주고 번호로 골라 오늘 행의 음식 칸을 채운다.
 // 번호(또는 새 음식명)를 직접 고르는 게 곧 확인이라, 쓰기 y/N을 한 번 더 묻지 않는다.
 export async function runDietPick(
   meal: string,
@@ -194,6 +194,17 @@ export async function runDietPick(
     return;
   }
 
-  await createRecord("diet", { 날짜: today, 식사: meal, 음식: picked });
-  console.log(`   ✅ ${today} · ${meal} · ${picked} 기록 완료`);
+  // 식단 페이지는 노션에서 매일 자동 생성된다 → 오늘 그 식사 행이 이미 있으면 채우고, 없을 때만 만든다.
+  // (없는 경우도 남겨둔다 — 자동 생성이 안 돌았거나 식사 이름을 새로 쓸 때가 있다.)
+  const todayRow = rows.find(
+    (r) => r.날짜 === today && String(r.식사 ?? "").trim() === meal
+  );
+  if (todayRow) {
+    const before = String(todayRow.음식 ?? "").trim();
+    await updateRecord("diet", todayRow.id, { 음식: picked });
+    console.log(`   ✅ ${today} · ${meal} · ${before ? `${before} → ` : ""}${picked} (기존 페이지 수정)`);
+  } else {
+    await createRecord("diet", { 날짜: today, 식사: meal, 음식: picked });
+    console.log(`   ✅ ${today} · ${meal} · ${picked} (새 페이지)`);
+  }
 }
