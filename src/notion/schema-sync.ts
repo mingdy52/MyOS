@@ -1,5 +1,7 @@
 import type { DbSchema } from "./schema.js";
-import { discoverFromPage, type DiscoveredSchemas } from "./discover.js";
+// discover.ts는 노션 SDK를 끌고 오므로 타입만 정적으로 가져오고, 실제 함수는
+// 발견이 필요한 순간에 동적 import 한다 — 덕분에 이 파일은 키 없이 테스트할 수 있다.
+import type { DiscoveredSchemas } from "./discover.js";
 import { loadCache, saveCache } from "./schema-cache.js";
 
 // 발견 결과(제목 → { ds, 컬럼 })를 실제 schemas 객체에 반영한다.
@@ -60,6 +62,7 @@ export async function syncSchemas(
         return;
       }
       console.log("🔎 노션 부모 페이지에서 DB 스키마를 발견하는 중…");
+      const { discoverFromPage } = await import("./discover.js");
       found = await discoverFromPage(pageId);
       saveCache(found);
       console.log(
