@@ -11,6 +11,9 @@ import { loadCache, saveCache } from "./schema-cache.js";
 //    (=코드 한 줄 안 고쳐도 새 DB가 조회/쓰기 도구에 바로 등장한다.)
 //  - 발견되지 않은 역할(예: 부모 페이지 밖에 있는 가계부)은 정적 스키마 그대로 둔다.
 //  - 직전 발견 결과(prev)에 있었는데 이번 발견에 없으면 → 노션에서 삭제된 것으로 보고 뺀다.
+//  - 끝으로 dataSourceId가 비어 있는 역할은 뺀다. 발견도 안 됐고 .env에 id도 없으면
+//    조회·쓰기가 애초에 불가능한 유령 항목이라, 목록·도구 enum에 남으면 헷갈리기만 한다
+//    (노션에 그 DB를 만들면 다음 refresh에 seed의 title로 짝이 맞아 저절로 돌아온다).
 export function apply(
   schemas: Record<string, DbSchema>,
   found: DiscoveredSchemas,
@@ -44,6 +47,10 @@ export function apply(
       if (title in found) continue;
       delete schemas[roleByTitle.get(title) ?? title];
     }
+  }
+
+  for (const [role, s] of Object.entries(schemas)) {
+    if (!s.dataSourceId) delete schemas[role];
   }
 }
 

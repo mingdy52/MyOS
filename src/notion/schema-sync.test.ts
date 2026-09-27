@@ -27,3 +27,15 @@ test("노션에서 지운 DB는 refresh 시 스키마에서도 빠진다", () =>
   assert.equal(schemas.diet!.dataSourceId, "ds-new"); // 남은 DB는 갱신된다
   assert.equal(schemas.expense!.dataSourceId, "ds-env"); // 정적 seed는 건드리지 않는다
 });
+
+test("노션에도 없고 .env에도 id가 없는 seed는 목록에서 빠진다", () => {
+  const schemas: Record<string, DbSchema> = {
+    diet: { title: "식단", dataSourceId: "ds-old", columns: {} },
+    // 노션에 만든 적이 없는 DB. process.env.NOTION_*_DATA_SOURCE_ID가 비어 있으면 이 꼴이 된다.
+    media: { title: "콘텐츠", dataSourceId: undefined as any, columns: {} },
+  };
+
+  apply(schemas, { 식단: disc() }, null);
+
+  assert.deepEqual(Object.keys(schemas), ["diet"]);
+});

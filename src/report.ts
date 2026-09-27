@@ -68,16 +68,21 @@ async function main() {
   // 지난 7일 데이터를 한 번에 모은다.
   // 목표(targets)만은 기간 필터 없이 전체를 가져온다 — 목표는 계속 유지되는 항목이라,
   // 이번 주 활동과 대조해 진행률을 추정하는 데 쓴다.
+  // 노션에 없는 DB(스키마에서 빠진 것)는 빈 배열로 넘긴다 — 한 DB가 없다고
+  // 주간 리포트 전체가 죽으면 그 주 기록이 통째로 날아간다.
+  const optional = (db: string, opts?: Parameters<typeof getRecords>[1]) =>
+    schemas[db] ? getRecords(db, opts) : [];
+
   const [targets, expenses, diet, workout, study, diary, weight, decisions, applications] = await Promise.all([
     getRecords("target"),
     getRecords("expense", { from: fromStr, to: toStr }),
     getRecords("diet", { from: fromStr, to: toStr }),
     getRecords("workout", { from: fromStr, to: toStr }),
-    getRecords("study", { from: fromStr, to: toStr }),
+    optional("study", { from: fromStr, to: toStr }),
     // 일기는 본문형(일기+)이지만 리포트엔 감정지표만 쓰므로 본문은 끈다(빠르게).
     // 본문에 담긴 '무엇을 하기로 했는가'는 아래 의사결정 로그가 대신 채워 준다.
     getRecords("diary", { from: fromStr, to: toStr, withBody: false }),
-    getRecords("weight", { from: fromStr, to: toStr }),
+    optional("weight", { from: fromStr, to: toStr }),
     // 의사결정 로그 — 이번 주에 "하기로 한 것"들. 리포트의 '말과 행동의 차이'에서
     // 대조의 '말' 쪽을 맡는다. (일기 본문을 안 읽는 대신 여기서 다짐을 가져온다)
     getRecords("decision", { from: fromStr, to: toStr }),
