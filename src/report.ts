@@ -66,36 +66,46 @@ async function main() {
   console.log(`📅 리포트 기간: ${title}`);
 
   // 지난 7일 데이터를 한 번에 모은다.
-  // 목표(targets)만은 기간 필터 없이 전체를 가져온다 — 목표는 계속 유지되는 항목이라,
+  // 목표(target)만은 기간 필터 없이 전체를 가져온다 — 목표는 계속 유지되는 항목이라,
   // 이번 주 활동과 대조해 진행률을 추정하는 데 쓴다.
-  // 노션에 없는 DB(스키마에서 빠진 것)는 빈 배열로 넘긴다 — 한 DB가 없다고
-  // 주간 리포트 전체가 죽으면 그 주 기록이 통째로 날아간다.
-  const optional = (db: string, opts?: Parameters<typeof getRecords>[1]) =>
-    schemas[db] ? getRecords(db, opts) : [];
-
-  const [targets, expenses, diet, workout, study, diary, weight, decisions, applications] = await Promise.all([
-    getRecords("target"),
-    getRecords("expense", { from: fromStr, to: toStr }),
-    getRecords("diet", { from: fromStr, to: toStr }),
-    getRecords("workout", { from: fromStr, to: toStr }),
-    optional("study", { from: fromStr, to: toStr }),
+  type Opts = NonNullable<Parameters<typeof getRecords>[1]>;
+  const range: Opts = { from: fromStr, to: toStr };
+  const sources: [string, string, Opts][] = [
+    ["목표", "target", {}],
+    ["지출", "expense", range],
+    ["식단", "diet", range],
+    ["운동", "workout", range],
+    ["공부", "study", range],
     // 일기는 본문형(일기+)이지만 리포트엔 감정지표만 쓰므로 본문은 끈다(빠르게).
     // 본문에 담긴 '무엇을 하기로 했는가'는 아래 의사결정 로그가 대신 채워 준다.
-    getRecords("diary", { from: fromStr, to: toStr, withBody: false }),
-    optional("weight", { from: fromStr, to: toStr }),
+    ["일기", "diary", { ...range, withBody: false }],
+    ["체중", "weight", range],
     // 의사결정 로그 — 이번 주에 "하기로 한 것"들. 리포트의 '말과 행동의 차이'에서
     // 대조의 '말' 쪽을 맡는다. (일기 본문을 안 읽는 대신 여기서 다짐을 가져온다)
-    getRecords("decision", { from: fromStr, to: toStr }),
+    ["의사결정", "decision", range],
     // 지원 현황 — 커리어 분야 결정의 '행동' 쪽. 이게 없으면
     // "기회 있을 때 바로 지원하기" 같은 결정이 지켜졌는지 확인할 방법이 없다.
-    getRecords("application", { from: fromStr, to: toStr }),
-  ]);
-  const data = { 기간: title, 목표: targets, 지출: expenses, 식단: diet, 운동: workout, 공부: study, 일기: diary, 체중: weight, 의사결정: decisions, 지원현황: applications };
+    ["지원현황", "application", range],
+  ];
+
+  // 노션에 없는 DB(지웠거나 부모 페이지 밖)는 키를 통째로 뺀다.
+  // 빈 배열로 넘기면 Claude가 "공부 기록 0건"처럼 존재하지도 않는 DB를 나무란다.
+  // 한 DB가 없다고 주간 리포트 전체가 죽어서도 안 된다 — 그 주 기록이 통째로 날아간다.
+  const data: Record<string, any> = { 기간: title };
+  await Promise.all(
+    sources
+      .filter(([, db]) => schemas[db])
+      .map(async ([key, db, opts]) => {
+        data[key] = await getRecords(db, opts);
+      })
+  );
 
   // Claude에게 분석 리포트를 받는다.
   const system =
     "너는 사용자의 주간 생활 데이터를 분석해 따뜻하고 솔직한 한국어 리포트를 쓰는 코치다.\n" +
-    "주어진 JSON을 근거로만 작성한다. '목표'는 전체 목록이고, 나머지(지출/식단/운동/공부/일기/체중/의사결정/지원현황)는 지난 7일치다. 데이터에 없는 사실을 지어내지 마라.\n" +
+    // 항목 목록은 실제로 넘긴 데이터에서 만든다 — 노션에서 지운 DB를 프롬프트가 부르면
+    // Claude가 그 DB를 "기록 0건"이라고 나무란다(없는 걸 없다고 혼내는 꼴).
+    `주어진 JSON을 근거로만 작성한다. '목표'는 전체 목록이고, 나머지(${Object.keys(data).filter((k) => k !== "기간" && k !== "목표").join("/")})는 지난 7일치다. 데이터에 없는 사실을 지어내지 마라.\n` +
     "'의사결정'은 그 주에 사용자가 내린 결정들을 정리해 둔 로그다(결정/분야/이유/대안/교훈/만족도). " +
     "'일기'에는 감정지표만 있고 본문이 없으니, 그 주에 무엇을 하기로 했는지는 이 의사결정 로그에서 읽어라.\n" +
     "'지원현황'은 그 주에 넣은 입사 지원이다. 커리어 분야 결정이 실제 행동으로 이어졌는지 여기서 확인한다. " +
@@ -106,7 +116,7 @@ async function main() {
     "## 좋은 점\n- (잘한 점들을 불릿으로, 구체적 수치 인용)\n" +
     "## 아쉬운 점\n- (개선이 필요한 점들을 불릿으로)\n" +
     "## 말과 행동의 차이\n" +
-    "(의사결정·목표에 적은 '하기로 한 것'과 운동·식단·공부·지출 '실제 기록'을 대조해, 어긋난 지점을 짚는다. " +
+    "(의사결정·목표에 적은 '하기로 한 것'과 위 JSON의 '실제 기록'을 대조해, 어긋난 지점을 짚는다. " +
     "의사결정 로그가 이 대조의 핵심 재료다 — 무엇을 하기로 했는지가 거기 명시돼 있으니, 그것부터 하나씩 실제 기록과 맞춰 봐라. " +
     "예: '평일 아침 운동하기로 함'이라 적혀 있는데 운동 기록은 주말 1회뿐. " +
     "결정에 '만족도'나 '교훈'이 적혀 있으면 그것도 함께 본다 — 본인이 이미 아쉬워한 부분은 다시 몰아세우지 말고 짚어만 준다. " +
