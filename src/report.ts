@@ -6,6 +6,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { notion } from "./notion/client.js";
 import { schemas } from "./notion/schema.js";
 import { getRecords } from "./notion/query.js";
+import { buildProperties } from "./notion/mutate.js";
 import { reportPeriod } from "./report-period.js";
 
 const anthropic = new Anthropic();
@@ -123,11 +124,16 @@ async function main() {
   const report = schemas.report;
   if (!report) throw new Error("schema.ts에 report 스키마가 없습니다.");
   const pageTitle = `[${monthly ? "월간" : "주간"} 리포트] ${title}`;
+  // 날짜는 시작~끝 범위로 넣는다 — 노션에서 정렬(시작일 기준)과 기간 필터가 둘 다 된다.
+  // 스키마에 있는 컬럼만 넘긴다: 노션에서 컬럼을 지워도 리포트가 죽지 않아야 한다.
+  const fields = Object.fromEntries(
+    Object.entries({ 제목: pageTitle, 날짜: `${fromStr} ~ ${toStr}` }).filter(
+      ([column]) => report.columns[column]
+    )
+  );
   const page = await notion.pages.create({
     parent: { type: "data_source_id", data_source_id: report.dataSourceId },
-    properties: {
-      제목: { title: [{ text: { content: pageTitle } }] },
-    },
+    properties: buildProperties("report", fields),
     children: toBlocks(summary),
   });
 

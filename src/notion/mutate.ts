@@ -40,7 +40,8 @@ function toProperty(type: FieldType, value: any) {
 
 // fields(컬럼명 → 값)를 노션 properties payload로 바꾼다.
 // 스키마에 없는 컬럼은 오타일 수 있으니 막아서 알려준다.
-function buildProperties(database: string, fields: Record<string, any>) {
+// report.ts도 이걸 쓴다(본문이 필요해 createRecord를 못 쓰고 pages.create를 직접 부른다).
+export function buildProperties(database: string, fields: Record<string, any>) {
   const schema = schemas[database];
   if (!schema) throw new Error(`알 수 없는 데이터베이스: ${database}`);
 
