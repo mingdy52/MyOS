@@ -118,18 +118,20 @@ async function main() {
     console.warn("⚠️ 응답이 max_tokens에 걸려 잘렸을 수 있습니다. max_tokens를 더 올리세요.");
   }
 
-  // 노션 리포트 DB에 페이지를 만든다. (제목=기간, 본문=분석 요약)
+  // 노션 리포트 DB에 페이지를 만든다. (제목=[구분]+기간, 본문=분석 요약)
+  // 프리픽스는 여기서만 붙인다 — 프롬프트에 넘기는 title은 기간만 담은 채로 둔다.
   const report = schemas.report;
   if (!report) throw new Error("schema.ts에 report 스키마가 없습니다.");
+  const pageTitle = `[${monthly ? "월간" : "주간"} 리포트] ${title}`;
   const page = await notion.pages.create({
     parent: { type: "data_source_id", data_source_id: report.dataSourceId },
     properties: {
-      제목: { title: [{ text: { content: title } }] },
+      제목: { title: [{ text: { content: pageTitle } }] },
     },
     children: toBlocks(summary),
   });
 
-  console.log(`✅ 리포트 생성 완료: ${(page as any).url ?? page.id}`);
+  console.log(`✅ ${pageTitle} 생성 완료: ${(page as any).url ?? page.id}`);
 }
 
 main().catch((err) => {
