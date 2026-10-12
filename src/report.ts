@@ -25,6 +25,9 @@ function toBlocks(text: string): any[] {
   const blocks = text
     .split("\n")
     .map((line) => line.trimEnd())
+    // 노션 rich_text는 평문이라 마크다운 볼드가 "**" 그대로 찍힌다. 줄 분류 전에 떼어낸다.
+    // (실제 볼드로 바꾸려면 rich_text를 **로 쪼개 annotations.bold를 붙여야 한다 — 지금은 안 쓴다.)
+    .map((line) => line.replace(/\*\*/g, ""))
     .filter((line) => line.trim() !== "")
     .map((line) => {
       if (/^---+$/.test(line.trim())) return { type: "divider", divider: {} };
