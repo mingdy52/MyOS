@@ -41,7 +41,7 @@ test("월간: 윤년 2월 말일은 29일", () => {
   assert.equal(reportPeriod(d(2028, 3, 1), true).to, "2028-02-29");
 });
 
-test("월간 제목은 0채움 없이", () => {
-  assert.equal(reportPeriod(d(2026, 10, 1), true).title, "2026년 9월");
+test("월간 제목은 월을 0채움한다", () => {
+  assert.equal(reportPeriod(d(2026, 10, 1), true).title, "2026년 09월");
   assert.equal(reportPeriod(d(2026, 11, 1), true).title, "2026년 10월");
 });

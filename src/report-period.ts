@@ -26,9 +26,8 @@ export function reportPeriod(now: Date, monthly: boolean): Period {
     // 지난달 1일 ~ 말일. new Date(y, m, 0)은 "이번 달 0일" = 지난달 말일이라 말일을 직접 셀 필요가 없다.
     const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const to = new Date(now.getFullYear(), now.getMonth(), 0);
-    // 월간 제목만은 0채움을 벗긴다(2026년 9월). 주간처럼 날짜까지 붙지 않아 자릿수를 맞출 이유가 없다.
-    const title = `${from.getFullYear()}년 ${from.getMonth() + 1}월`;
-    return { from: iso(from), to: iso(to), title, unit: "달", span: "한 달" };
+    const p = parts(from);
+    return { from: iso(from), to: iso(to), title: `${p.y}년 ${p.m}월`, unit: "달", span: "한 달" };
   }
 
   // 지난주 월요일 ~ 일요일.
