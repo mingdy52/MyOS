@@ -1,0 +1,31 @@
+name: monthly-report
+
+# 매월 1일 오전 9시(KST)에 지난달 월간 리포트를 생성한다.
+# GitHub의 cron은 UTC 기준이라, 1일 09:00 KST = 1일 00:00 UTC 로 적는다.
+# 주간(weekly-report.yml)과 같은 스크립트를 REPORT_PERIOD=month 로 돌린 것뿐이다 —
+# 파일을 나눈 건 둘을 따로 켜고 끄고, 실행 이력을 따로 보기 위해서다.
+on:
+  schedule:
+    - cron: "0 0 1 * *"
+  workflow_dispatch: # 깃허브 화면에서 수동으로도 돌려볼 수 있게 한다.
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run report
+        env:
+          REPORT_PERIOD: month
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          # 스키마는 부모 페이지에서 동적으로 발견한다(weekly-report.yml과 동일).
+          NOTION_DATA_PAGE_ID: ${{ secrets.NOTION_DATA_PAGE_ID }}

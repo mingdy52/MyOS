@@ -9,7 +9,8 @@ npm run dev        # 대화형 비서 REPL (index.ts). REPL 명령: help / db / 
 npm test           # node:test 전체 (src/**/*.test.ts)
 node --import tsx --test src/model-router.test.ts   # 테스트 파일 하나만
 npx tsc --noEmit   # 타입 체크 (CI가 테스트와 함께 돌린다)
-npm run report     # 주간 리포트 배치 수동 실행 (노션에 페이지를 씀 — 실제 쓰기 발생)
+npm run report     # 주간 리포트 배치 수동 실행 (지난주 월~일. 노션에 페이지를 씀 — 실제 쓰기 발생)
+npm run report:month # 월간 리포트 (지난달 1일~말일). 같은 스크립트를 REPORT_PERIOD=month 로 돌린다
 npm run portfolio  # 노션 → src/content/portfolio.json 초안 (Claude 호출)
 npm run open       # site.ts 빌드 후 docs/index.html 열기
 ```
